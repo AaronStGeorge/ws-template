@@ -12,3 +12,6 @@ build/
 # Coding agent stuff
 .claude
 .codex
+
+# Ignore devcontainers, usually machine specific
+.devcontainer
