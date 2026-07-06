@@ -8,6 +8,7 @@ from buildlib import BuildResult
 from builds.ggml_hrx_kernel_bench_env import (
     GgmlHrxKernelBenchEnvKnobs,
     GgmlHrxKernelBenchEnvResult,
+    LOOM_TOOLS,
     build,
 )
 from builds.hrx_system import HrxSystemBuildResult, HrxSystemKnobs
@@ -79,11 +80,11 @@ class BenchEnvBuildTests(unittest.TestCase):
             # ROCm + helper + LD_LIBRARY_PATH composition
             self.assertIn("path_prepend()", text)
             self.assertIn(f'export ROCM_PATH="{rocm_root}"', text)
+            self.assertIn('export GGML_HRX_ROCM_PATH="$ROCM_PATH"', text)
             self.assertIn('path_prepend PATH "$ROCM_PATH/lib/llvm/bin"', text)
             self.assertIn('path_prepend LD_LIBRARY_PATH "$ROCM_PATH/lib"', text)
             self.assertIn('path_prepend LD_LIBRARY_PATH "$ROCM_PATH/lib/rocm_sysdeps/lib"', text)
-            # trimmed: lib64 is absent from the SDK, GGML_HRX_ROCM_PATH is redundant
-            self.assertNotIn("GGML_HRX_ROCM_PATH", text)
+            # trimmed: lib64 is absent from the SDK
             self.assertNotIn("lib64", text)
             # per-project venv (no shared/root venv) + two editable installs + watch_file
             self.assertIn('"${PYTHON:-python3}" -m venv "$PWD/.venv"', text)
@@ -97,14 +98,30 @@ class BenchEnvBuildTests(unittest.TestCase):
                 text,
             )
             # the bench itself, editable with extras
-            self.assertIn('python -c "import ggml_hrx_kernel_bench"', text)
+            self.assertIn(
+                'python -c "import ggml_hrx_kernel_bench; import numpy; '
+                'import pytest; import yaml"',
+                text,
+            )
+            self.assertIn("import numpy; import pytest; import yaml", text)
             self.assertIn(
                 'pip install -e "$PWD[numpy,dev]" --config-settings editable_mode=compat',
                 text,
             )
             self.assertIn(f'watch_file "{rocm_root}"', text)
-            # all three Loom tools discovered + exported
-            self.assertEqual(set(result.loom_tools), {"LOOM_LINK", "LOOM_COMPILE", "IREE_BENCHMARK_LOOM"})
+            # all three Loom tools discovered + exported, with a stable CMake tool dir
+            self.assertEqual(
+                set(result.loom_tools),
+                {"LOOM_LINK", "LOOM_COMPILE", "IREE_BENCHMARK_LOOM"},
+            )
+            self.assertIn('export GGML_HRX_TOOL_DIR="$PWD/build/env-tools/bin"', text)
+            self.assertIn('mkdir -p "$GGML_HRX_TOOL_DIR"', text)
+            self.assertIn('path_prepend PATH "$GGML_HRX_TOOL_DIR"', text)
+            for env_name, filename in LOOM_TOOLS.items():
+                self.assertIn(
+                    f'ln -sfn "${env_name}" "$GGML_HRX_TOOL_DIR/{filename}"',
+                    text,
+                )
             for env_name, tool_path in result.loom_tools.items():
                 self.assertIn(f'export {env_name}="{tool_path}"', text)
                 self.assertTrue(tool_path.endswith(("loom-link", "loom-compile", "iree-benchmark-loom")))

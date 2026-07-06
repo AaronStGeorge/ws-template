@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -211,8 +210,8 @@ if [ "${@SKIP@:-0}" != "1" ]; then
   if ! python -c "import @LIB_IMPORT@" 2>/dev/null; then
     pip install -e "@LIB_PYTHON@" --config-settings editable_mode=compat
   fi
-  # This bench checkout, editable, with extras.
-  if ! python -c "import @PKG@" 2>/dev/null; then
+  # This bench checkout, editable, with test/runtime extras.
+  if ! python -c "import @PKG@; import numpy; import pytest; import yaml" 2>/dev/null; then
     pip install -e "$PWD@EXTRAS@" --config-settings editable_mode=compat
   fi
 fi"""
@@ -230,13 +229,13 @@ def _render_envrc(
     )
 
     # ROCM_PATH is what the bench propagates to the loom/iree tools (and feeds to
-    # --rocm-path). bin + lib/llvm/bin give the ROCm/LLVM toolchain; lib +
-    # rocm_sysdeps/lib cover the runtime libs the tools dlopen for `run`. (lib64 is
-    # absent from TheRock SDKs, and GGML_HRX_ROCM_PATH is already mirrored from
-    # ROCM_PATH by the bench's config.command_env -- both omitted.)
+    # --rocm-path). GGML_HRX_ROCM_PATH is the CMake test harness default. bin +
+    # lib/llvm/bin give the ROCm/LLVM toolchain; lib + rocm_sysdeps/lib cover the
+    # runtime libs the tools dlopen for `run`. lib64 is absent from TheRock SDKs.
     rocm_block = (
         "# --- ROCm (from RocmInstallResult.rocm_path) ---\n"
         f'export ROCM_PATH="{rocm_path}"\n'
+        'export GGML_HRX_ROCM_PATH="$ROCM_PATH"\n'
         'path_prepend PATH "$ROCM_PATH/bin"\n'
         'path_prepend PATH "$ROCM_PATH/lib/llvm/bin"\n'
         'path_prepend LD_LIBRARY_PATH "$ROCM_PATH/lib"\n'
@@ -244,15 +243,18 @@ def _render_envrc(
     )
 
     loom_lines: list[str] = []
-    loom_dirs: list[str] = []
     for env_name, tool_path in loom_tools.items():
         loom_lines.append(f'export {env_name}="{tool_path}"')
-        parent = os.path.dirname(tool_path)
-        if parent not in loom_dirs:
-            loom_dirs.append(parent)
-    loom_body = "\n".join(loom_lines + [f'path_prepend PATH "{d}"' for d in loom_dirs])
+    symlink_lines = [
+        'export GGML_HRX_TOOL_DIR="$PWD/build/env-tools/bin"',
+        'mkdir -p "$GGML_HRX_TOOL_DIR"',
+    ]
+    for env_name, filename in LOOM_TOOLS.items():
+        symlink_lines.append(f'ln -sfn "${env_name}" "$GGML_HRX_TOOL_DIR/{filename}"')
+    symlink_lines.append('path_prepend PATH "$GGML_HRX_TOOL_DIR"')
+    loom_body = "\n".join(loom_lines + symlink_lines)
     loom_block = (
-        "# --- Loom tools (discovered in the HRX build tree; bench takes them via --flags) ---\n"
+        "# --- Loom tools (discovered in the HRX build tree; tests use GGML_HRX_TOOL_DIR) ---\n"
         f"{loom_body}\n"
         "# Loom binaries dynamically link ROCm; the LD_LIBRARY_PATH entries above cover them.\n"
         '# export LOOMC_HSA_RUNTIME_PATH="$ROCM_PATH/lib"'
