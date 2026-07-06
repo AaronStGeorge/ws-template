@@ -114,7 +114,7 @@ class BenchEnvBuildTests(unittest.TestCase):
                 set(result.loom_tools),
                 {"LOOM_LINK", "LOOM_COMPILE", "IREE_BENCHMARK_LOOM"},
             )
-            self.assertIn('export GGML_HRX_TOOL_DIR="$PWD/build/env-tools/bin"', text)
+            self.assertIn('export GGML_HRX_TOOL_DIR="$PWD/.ggml_hrx_tool_dir"', text)
             self.assertIn('mkdir -p "$GGML_HRX_TOOL_DIR"', text)
             self.assertIn('path_prepend PATH "$GGML_HRX_TOOL_DIR"', text)
             for env_name, filename in LOOM_TOOLS.items():

@@ -55,6 +55,28 @@ def _plain_gfx(value: str) -> str:
     return gfx
 
 
+def _gpu_index(value: str) -> int:
+    """argparse type: require a non-negative GPU device index like ``0`` or ``1``.
+
+    Written verbatim into the ``.envrc`` as ``ROCR_VISIBLE_DEVICES`` to pin every
+    ROCr-runtime consumer to one GPU. Only the shape is validated (a non-negative
+    integer) -- the index is not checked against enumerated hardware, since the
+    ``.envrc`` may run on a different machine than the one that generated it.
+    """
+    text = value.strip()
+    try:
+        index = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"--gpu-selection expects a device index like 0 or 1, not {value!r}"
+        )
+    if index < 0:
+        raise argparse.ArgumentTypeError(
+            f"--gpu-selection must be non-negative, not {index}"
+        )
+    return index
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="build-ggml-hrx-kernel-bench.py",
@@ -67,6 +89,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Plain AMDGPU arch number, e.g. 1201 (no 'gfx' prefix). Threaded into "
         "the ROCm tarball selection (via pins.json's gfx_url_targets table) and the "
         "HRX AMDGPU targets.",
+    )
+    parser.add_argument(
+        "--gpu-selection",
+        dest="gpu_index",
+        type=_gpu_index,
+        default=None,
+        help="Optional GPU device index (0, 1, ...) to pin via ROCR_VISIBLE_DEVICES "
+        "in the generated .envrc. Omit to leave all GPUs visible.",
     )
     parser.add_argument(
         "--dry-run",
@@ -100,7 +130,9 @@ def main(argv: list[str] | None = None) -> int:
 
     rocm_knobs = PinnedTarballKnobs(source_dir=str(HRX_SOURCE), gfx_target=args.gfx)
     hrx_knobs = HrxSystemKnobs(source_dir=str(HRX_SOURCE), gfx_targets=args.gfx)
-    bench_knobs = GgmlHrxKernelBenchEnvKnobs(source_dir=str(BENCH_SOURCE))
+    bench_knobs = GgmlHrxKernelBenchEnvKnobs(
+        source_dir=str(BENCH_SOURCE), gpu_index=args.gpu_index
+    )
 
     if args.dry_run:
         banner(f"DRY RUN (gfx={args.gfx})")
@@ -143,6 +175,7 @@ def _summary(rocm_result, hrx_result, bench_result) -> str:
         f"   hrx.build_path     = {hrx_result.build_path}",
         f"   bench.written      = {bench_result.written}",
         f"   bench.envrc_path   = {bench_result.envrc_path}",
+        f"   bench.gpu_index    = {bench_result.knobs.gpu_index}",
         f"   bench.loom_tools   = {bench_result.loom_tools}",
     ]
     return "\n".join(lines)

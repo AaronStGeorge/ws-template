@@ -219,6 +219,7 @@ _TARBALL_STEM = "therock-dist-linux"
 # ``gfx120X-all`` family bundle while ``1151`` is published standalone as
 # ``gfx1151``. Support a new arch by adding one (verified) row here.
 _GFX_URL_TARGETS = {
+    "1100": "gfx110X-all",
     "1200": "gfx120X-all",
     "1201": "gfx120X-all",
     "1151": "gfx1151",

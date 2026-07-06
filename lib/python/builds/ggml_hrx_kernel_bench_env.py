@@ -39,6 +39,7 @@ class GgmlHrxKernelBenchEnvKnobs(BuildKnobs):
     """
 
     pip_extras: str = "numpy,dev"  # extras for the bench editable install; "" -> none
+    gpu_index: int | None = None  # ROCR_VISIBLE_DEVICES device index; None -> no mask
     skip_venv_var: str = "GGML_HRX_BENCH_SKIP_VENV"  # set =1 to skip venv handling
     package_import: str = "ggml_hrx_kernel_bench"  # importability guard for the bench install
     lib_import: str = "buildlib"  # importability guard for the lib/python install
@@ -241,12 +242,22 @@ def _render_envrc(
         'path_prepend LD_LIBRARY_PATH "$ROCM_PATH/lib"\n'
         'path_prepend LD_LIBRARY_PATH "$ROCM_PATH/lib/rocm_sysdeps/lib"'
     )
+    if knobs.gpu_index is not None:
+        # Pin every ROCr-runtime consumer (IREE, HIP, the Loom binaries) to one GPU.
+        # The index is machine-local: enumeration order can shift across reboots or
+        # driver changes, so it is only meaningful on the box this .envrc runs on.
+        rocm_block += (
+            "\n# --- pin to a single GPU (device index; machine-local ordering) ---\n"
+            f'export ROCR_VISIBLE_DEVICES="{knobs.gpu_index}"'
+        )
 
     loom_lines: list[str] = []
     for env_name, tool_path in loom_tools.items():
         loom_lines.append(f'export {env_name}="{tool_path}"')
     symlink_lines = [
-        'export GGML_HRX_TOOL_DIR="$PWD/build/env-tools/bin"',
+        # Persistent, outside build/ so `rm -rf build` can't delete the tool
+        # symlinks (mirrors the .rocm link; see builds/rocm.py).
+        'export GGML_HRX_TOOL_DIR="$PWD/.ggml_hrx_tool_dir"',
         'mkdir -p "$GGML_HRX_TOOL_DIR"',
     ]
     for env_name, filename in LOOM_TOOLS.items():
