@@ -72,7 +72,7 @@ class PinnedTarballKnobs(RocmInstallKnobs):
     gfx_target: str  # plain AMDGPU arch number input (required), e.g. "1201"
     pin: str = "rocm"  # key to look up in the repo-root pins.json
     cache_dir: str = ""  # download/extract cache root; "" -> ~/.cache/hrx/rocm
-    link_name: str = "rocm-root"  # symlink created under <source_dir>/build
+    link_name: str = ".rocm"  # symlink created in <source_dir> (sibling of .envrc)
 
     @property
     def provider(self) -> RocmProvider:
@@ -150,7 +150,9 @@ def _build_pinned_tarball(knobs: PinnedTarballKnobs) -> RocmInstallResult:
     checksums, so the download is not hash-verified. The tarball is cached at
     ``<cache_dir>/<version>-<gfx>`` and only re-fetched when the pin (recorded in a
     marker file) does not match, so repeated builds are cheap. The SDK root is then
-    symlinked to ``<source_dir>/build/<link_name>`` and returned as ``rocm_path``.
+    symlinked to ``<source_dir>/<link_name>`` -- a sibling of ``.envrc``, default
+    ``.rocm`` -- and returned as ``rocm_path``. It deliberately does not live under
+    ``build/`` so that ``rm -rf build`` cannot delete the toolchain link.
     """
     src = resolve_source_dir(knobs)
     out = build_dir(src)
@@ -168,7 +170,7 @@ def _build_pinned_tarball(knobs: PinnedTarballKnobs) -> RocmInstallResult:
         )
         install_dir = cache_root / f"{version}-{knobs.gfx_target}"
         marker = install_dir / ".hrx-rocm-pin.json"
-        link_path = out / knobs.link_name
+        link_path = src / knobs.link_name
         root = _cached_root(marker, url, install_dir)
         if root is not None:
             log_parts.append(f"== Cached ROCm pin {version}/{knobs.gfx_target} at {install_dir}")

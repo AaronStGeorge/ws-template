@@ -6,7 +6,7 @@ of the build:
 
   1. ``builds.rocm.build`` with :class:`PinnedTarballKnobs` (the PINNED_TARBALL
      strategy) downloads the gfx-templated nightly tarball named in ``pins.json``,
-     caches it, and symlinks the SDK into ``sources/hrx-system/build/rocm-root``.
+     caches it, and symlinks the SDK into ``sources/hrx-system/.rocm``.
   2. ``builds.hrx_system.build`` configures + compiles + installs the in-tree IREE
      runtime, libhrx, and Loom tooling against that SDK.
 

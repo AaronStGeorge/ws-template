@@ -5,7 +5,7 @@ One command threads a single AMDGPU architecture (``--gfx``) through three steps
 
   1. ``builds.rocm.build`` with :class:`PinnedTarballKnobs` downloads the
      gfx-templated nightly ROCm tarball named in ``pins.json``, caches it, and
-     symlinks the SDK into ``sources/hrx-system/build/rocm-root``.
+     symlinks the SDK into ``sources/hrx-system/.rocm``.
   2. ``builds.hrx_system.build`` configures + compiles + installs the in-tree IREE
      runtime, libhrx, and Loom tooling against that SDK.
   3. ``builds.ggml_hrx_kernel_bench_env.build`` writes ``sources/ggml-hrx-kernel-bench/.envrc``

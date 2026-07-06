@@ -73,7 +73,7 @@ class RocmKnobsTests(unittest.TestCase):
                 "gfx_target": "gfx1151",
                 "pin": "rocm",
                 "cache_dir": "",
-                "link_name": "rocm-root",
+                "link_name": ".rocm",
             },
         )
 
@@ -208,7 +208,7 @@ class PinnedTarballBuildTests(unittest.TestCase):
                 self.assertTrue(result.installed, msg=result.log)
                 self.assertEqual(result.provider, RocmProvider.PINNED_TARBALL)
 
-                link = repo / "build" / "rocm-root"
+                link = repo / ".rocm"
                 self.assertTrue(link.is_symlink())
                 self.assertEqual(result.rocm_path, link)
                 # Located the real root inside the wrapper directory.
@@ -304,7 +304,7 @@ class PinnedTarballBuildTests(unittest.TestCase):
             with _resolved(arc_a.as_uri()):
                 r1 = rocm.build(knobs)
             self.assertTrue(r1.installed, msg=r1.log)
-            link = repo / "build" / "rocm-root"
+            link = repo / ".rocm"
             self.assertTrue((link / "bin" / "marker_a").exists())
 
             with _resolved(arc_b.as_uri()):
@@ -342,7 +342,7 @@ class PinnedTarballBuildTests(unittest.TestCase):
                 r2 = rocm.build(knobs)
             self.assertTrue(r2.installed, msg=r2.log)
             self.assertNotIn("Cached ROCm pin", r2.log)  # corruption detected -> re-extract
-            self.assertTrue((repo / "build" / "rocm-root" / "bin" / "amdclang++").exists())
+            self.assertTrue((repo / ".rocm" / "bin" / "amdclang++").exists())
 
     def test_symlink_replaces_existing_real_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -355,7 +355,7 @@ class PinnedTarballBuildTests(unittest.TestCase):
             repo = tmp_path / "repo"
             repo.mkdir()
             # A pre-existing real directory sits where the symlink should go.
-            real = repo / "build" / "rocm-root"
+            real = repo / ".rocm"
             real.mkdir(parents=True)
             (real / "stale").write_text("x")
 
@@ -368,7 +368,7 @@ class PinnedTarballBuildTests(unittest.TestCase):
                     )
                 )
             self.assertTrue(result.installed, msg=result.log)
-            link = repo / "build" / "rocm-root"
+            link = repo / ".rocm"
             self.assertTrue(link.is_symlink())
             self.assertFalse((link / "stale").exists())
 
