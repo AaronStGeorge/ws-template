@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Build the workspace HRX System and generate the ggml-hrx-kernel-bench ``.envrc``.
+"""Build ggml-hrx-kernel-bench and generate its ``.envrc``.
 
-One command threads a single AMDGPU architecture (``--gfx``) through three steps:
+One command threads a single AMDGPU architecture (``--gfx``) through two steps:
 
   1. ``builds.rocm.build`` with :class:`PinnedTarballKnobs` downloads the
      gfx-templated nightly ROCm tarball named in ``pins.json``, caches it, and
      symlinks the SDK into ``sources/hrx-system/.rocm``.
-  2. ``builds.hrx_system.build`` configures + compiles + installs the in-tree IREE
-     runtime, libhrx, and Loom tooling against that SDK.
-  3. ``builds.ggml_hrx_kernel_bench_env.build`` writes ``sources/ggml-hrx-kernel-bench/.envrc``
-     wiring that ROCm SDK and the freshly built Loom tools, and managing the
-     bench's own venv + editable install.
+  2. ``builds.ggml_hrx_kernel_bench.build`` configures + compiles the bench against
+     that SDK -- the bench CMake ``add_subdirectory``s the hrx-system tree and builds
+     the in-tree IREE runtime and Loom tooling itself (staging tools into
+     ``build/tools``) -- then writes ``sources/ggml-hrx-kernel-bench/.envrc`` wiring
+     the ROCm SDK at runtime and managing the bench's own venv + editable install.
 
 The HRX and bench sources are hard-coded to this workspace's checkouts -- the
 underlying library can target trees anywhere, but this driver targets here.
@@ -22,9 +22,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from builds import ggml_hrx_kernel_bench_env, hrx_system, rocm
-from builds.ggml_hrx_kernel_bench_env import GgmlHrxKernelBenchEnvKnobs
-from builds.hrx_system import HrxSystemKnobs
+from builds import ggml_hrx_kernel_bench, rocm
+from builds.ggml_hrx_kernel_bench import GgmlHrxKernelBenchKnobs
 from builds.rocm import PinnedTarballKnobs
 
 # Repo root, for locating the workspace source checkouts (four levels up from
@@ -129,15 +128,16 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     rocm_knobs = PinnedTarballKnobs(source_dir=str(HRX_SOURCE), gfx_target=args.gfx)
-    hrx_knobs = HrxSystemKnobs(source_dir=str(HRX_SOURCE), gfx_targets=args.gfx)
-    bench_knobs = GgmlHrxKernelBenchEnvKnobs(
-        source_dir=str(BENCH_SOURCE), gpu_index=args.gpu_index
+    bench_knobs = GgmlHrxKernelBenchKnobs(
+        source_dir=str(BENCH_SOURCE),
+        hrx_systems_source_dir=str(HRX_SOURCE),
+        gfx_targets=args.gfx,
+        gpu_index=args.gpu_index,
     )
 
     if args.dry_run:
         banner(f"DRY RUN (gfx={args.gfx})")
         print(f"  rocm  knobs: {rocm_knobs.as_dict()}")
-        print(f"  hrx   knobs: {hrx_knobs.as_dict()}")
         print(f"  bench knobs: {bench_knobs.as_dict()}")
         return 0
 
@@ -149,34 +149,25 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"   ROCm SDK: {rocm_result.rocm_path}")
 
-    banner(f"Building HRX System (gfx={args.gfx}) at {HRX_SOURCE}")
-    hrx_result = hrx_system.build(hrx_knobs, rocm_result)
-    if not hrx_result.built:
-        print(hrx_result.log, file=sys.stderr)
-        print(f"!! HRX build failed (configure={hrx_result.configure_exit_code}, "
-              f"build={hrx_result.build_exit_code})", file=sys.stderr)
-        return 1
+    banner(f"Building ggml-hrx-kernel-bench (gfx={args.gfx}) at {BENCH_SOURCE}")
+    # build() fails loudly (dumps the log to stderr and exits nonzero) on any
+    # configure/compile/.envrc error, so a returned result is always a success.
+    bench_result = ggml_hrx_kernel_bench.build(bench_knobs, rocm_result)
 
-    banner(f"Generating bench .envrc at {BENCH_SOURCE}")
-    bench_result = ggml_hrx_kernel_bench_env.build(bench_knobs, rocm_result, hrx_result)
-    if not bench_result.written:
-        print(bench_result.log, file=sys.stderr)
-
-    print(_summary(rocm_result, hrx_result, bench_result))
-    return 0 if bench_result.written else 1
+    print(_summary(rocm_result, bench_result))
+    return 0
 
 
-def _summary(rocm_result, hrx_result, bench_result) -> str:
+def _summary(rocm_result, bench_result) -> str:
     lines = [
         "== Summary",
         f"   rocm.rocm_path     = {rocm_result.rocm_path}",
-        f"   hrx.built          = {hrx_result.built}",
-        f"   hrx.installed      = {hrx_result.installed}",
-        f"   hrx.build_path     = {hrx_result.build_path}",
+        f"   bench.built        = {bench_result.built}",
+        f"   bench.build_path   = {bench_result.build_path}",
         f"   bench.written      = {bench_result.written}",
         f"   bench.envrc_path   = {bench_result.envrc_path}",
+        f"   bench.claude_md    = {bench_result.claude_md_path}",
         f"   bench.gpu_index    = {bench_result.knobs.gpu_index}",
-        f"   bench.loom_tools   = {bench_result.loom_tools}",
     ]
     return "\n".join(lines)
 
