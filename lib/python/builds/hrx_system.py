@@ -68,20 +68,6 @@ class HrxSystemBuildResult(BuildResult):
         """True when the public dist was installed without error."""
         return self.install_exit_code == 0
 
-    def as_prompt_input(self, tail_chars: int = 4000) -> dict[str, object]:
-        return {
-            "project": self.project,
-            "knobs": self.knobs.as_dict(),
-            "built": self.built,
-            "installed": self.installed,
-            "configure_exit_code": self.configure_exit_code,
-            "build_exit_code": self.build_exit_code,
-            "install_exit_code": self.install_exit_code,
-            "build_path": str(self.build_path),
-            "install_path": str(self.install_path) if self.install_path else None,
-            "log_tail": self.log[-tail_chars:],
-        }
-
 
 def build(knobs: HrxSystemKnobs, rocm: RocmInstallResult) -> HrxSystemBuildResult:
     """Configure and build the HRX System CMake project (and optionally install it).

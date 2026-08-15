@@ -101,20 +101,6 @@ class RocmInstallResult(BuildResult):
         """True when the SDK was materialized and linked without error."""
         return self.exit_code == 0 and self.rocm_path is not None
 
-    def as_prompt_input(self, tail_chars: int = 4000) -> dict[str, object]:
-        return {
-            "project": self.project,
-            "provider": str(self.provider),
-            "knobs": self.knobs.as_dict(),
-            "installed": self.installed,
-            "exit_code": self.exit_code,
-            "source_path": str(self.source_path),
-            "build_path": str(self.build_path),
-            "rocm_path": str(self.rocm_path) if self.rocm_path else None,
-            "cache_path": str(self.cache_path) if self.cache_path else None,
-            "log_tail": self.log[-tail_chars:],
-        }
-
 
 class RocmInstallError(RuntimeError):
     """A ROCm install step failed; carries the exit code to record on the result."""

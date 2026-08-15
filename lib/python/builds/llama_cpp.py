@@ -64,23 +64,6 @@ class LlamaCppBuildResult(BuildResult):
         """True when the ``.envrc`` was written."""
         return self.envrc_path is not None
 
-    def as_prompt_input(self, tail_chars: int = 4000) -> dict[str, object]:
-        return {
-            "project": self.project,
-            "knobs": self.knobs.as_dict(),
-            "built": self.built,
-            "written": self.written,
-            "configure_exit_code": self.configure_exit_code,
-            "build_exit_code": self.build_exit_code,
-            "build_path": str(self.build_path),
-            "envrc_path": str(self.envrc_path) if self.envrc_path else None,
-            "hrx_install_path": str(self.hrx_install_path)
-            if self.hrx_install_path
-            else None,
-            "rocm_path": str(self.rocm_path) if self.rocm_path else None,
-            "log_tail": self.log[-tail_chars:],
-        }
-
 
 def build(
     knobs: LlamaCppKnobs, rocm: RocmInstallResult, hrx: HrxSystemBuildResult

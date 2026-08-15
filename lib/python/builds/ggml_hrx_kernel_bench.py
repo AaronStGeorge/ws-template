@@ -73,21 +73,6 @@ class GgmlHrxKernelBenchBuildResult(BuildResult):
         """True when the ``.envrc`` was written (implies the build succeeded)."""
         return self.envrc_path is not None
 
-    def as_prompt_input(self, tail_chars: int = 4000) -> dict[str, object]:
-        return {
-            "project": self.project,
-            "knobs": self.knobs.as_dict(),
-            "built": self.built,
-            "written": self.written,
-            "configure_exit_code": self.configure_exit_code,
-            "build_exit_code": self.build_exit_code,
-            "build_path": str(self.build_path),
-            "envrc_path": str(self.envrc_path) if self.envrc_path else None,
-            "claude_md_path": str(self.claude_md_path) if self.claude_md_path else None,
-            "rocm_path": str(self.rocm_path) if self.rocm_path else None,
-            "log_tail": self.log[-tail_chars:],
-        }
-
 
 class BenchEnvError(RuntimeError):
     """A ``.envrc`` generation step failed; carries an exit code for the log."""

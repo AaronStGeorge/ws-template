@@ -13,4 +13,4 @@ build/
 .devcontainer
 
 # Build script used for this workspace
-build.py
+sources/build.py
