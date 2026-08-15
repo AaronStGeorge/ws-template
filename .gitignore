@@ -9,10 +9,6 @@ build/
 # Assembly-line run artifacts
 .runs/
 
-# Coding agent stuff
-.claude
-.codex
-
 # Ignore devcontainers, usually machine specific
 .devcontainer
 
