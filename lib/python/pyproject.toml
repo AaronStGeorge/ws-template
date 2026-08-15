@@ -10,4 +10,4 @@ requires-python = ">=3.11"
 
 [tool.setuptools]
 # Three independent top-level packages installed editable; tests/ is intentionally excluded.
-packages = ["assemblyline", "buildlib", "builds"]
+packages = ["buildlib", "builds"]
