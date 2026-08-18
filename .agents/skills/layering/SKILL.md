@@ -3,6 +3,8 @@ name: layering
 description: Build and sharpen a project's layered context docs. Use to define domain terminology, record component requirements, interfaces, and designs, decompose a system into components, or maintain the domain model during a grilling or explore session.
 ---
 
+**DO WRITE TO CONTEXT.md outside of a specified design session. If launched within a grilling, this is a design session, if the user has told you this is a design session it's a design session. Otherwise CONTEXT.md is read only. Feel free to note to the user if design principles are being violated by current non-design session.**
+
 # Layering
 
 > You can outsource your thinking but you cannot outsource your understanding.

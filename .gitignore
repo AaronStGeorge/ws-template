@@ -6,11 +6,5 @@ __pycache__/
 # Build directories, usually under sources/projectX/build
 build/
 
-# Assembly-line run artifacts
-.runs/
-
 # Ignore devcontainers, usually machine specific
 .devcontainer
-
-# Build script used for this workspace
-sources/build.py
