@@ -1,0 +1,3 @@
+interface:
+  display_name: "Requirements Cop"
+  short_description: "Cut the requirements that don't earn their cost"
