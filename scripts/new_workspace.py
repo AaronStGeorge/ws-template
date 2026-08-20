@@ -26,6 +26,7 @@ Result::
       .claude/skills ->  ../../../.agents/skills
       docs ->            ../../docs
       AGENTS.md ->       ../../AGENTS.md
+      CLAUDE.md ->       ../../AGENTS.md
       build.py           copy of sources/build.py
 
 Commitments: refuses (mkdir fails) rather than touching an existing workspace;
@@ -133,6 +134,7 @@ def main():
         Path("..", "..", "docs"), target_is_directory=True
     )
     (wsdir / "AGENTS.md").symlink_to(Path("..", "..", "AGENTS.md"))
+    (wsdir / "CLAUDE.md").symlink_to(Path("..", "..", "AGENTS.md"))
 
     shutil.copy2(ws / "sources" / "build.py", wsdir / "build.py")
 
