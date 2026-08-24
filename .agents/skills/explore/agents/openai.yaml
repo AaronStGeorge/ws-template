@@ -1,3 +1,0 @@
-interface:
-  display_name: "Explore"
-  short_description: "Explore a codebase in layers, mapping it into context docs"

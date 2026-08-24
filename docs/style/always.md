@@ -71,37 +71,31 @@ test the producer instead.
 ### Open each implementation file with a narrative header
 
 Every substantial implementation file starts with a doc comment, in the
-language's doc-comment form. The goal is to produce a working mental model of
-the code, not to produce and exhaustive reference fore the code below. Cover:
+language's doc-comment form, applying the
+[component lens](../component-lens.md) at file scale. The lens owns the goal
+(transfer a working mental model, never restate the code), the tests for what
+earns its place, and the freedom of form. At file scale its four questions
+become:
 
-- The terms it leans on: briefly define any project-specific term the file's
+- **Language** — briefly define any project-specific term the file's
   identifiers use whose meaning a newcomer could not guess.
-- Why the file exists: the problem it solves for the code that depends on it,
-  and the constraints it was written under (a platform, a contract it must
-  honor, a compatibility obligation).
-- What it commits to at its boundary: the entry points, inputs and outputs,
-  invariants, and failure modes callers can rely on.
-- How it delivers that: the strategy, plus the decisions and gotchas that would
-  surprise the next reader — ordering constraints, failure handling, trade-offs,
-  and any previous approaches now abandoned that are illustrative for the current
-  shape of the code.
+- **Requirements** — the problem the file solves for the code that depends on
+  it, and the constraints it was written under (a platform, a contract it
+  must honor, a compatibility obligation).
+- **Spec** — the entry points, inputs and outputs, invariants, and failure
+  modes callers can rely on.
+- **Design** — the strategy, plus the decisions and gotchas that would
+  surprise the next reader: ordering constraints, failure handling,
+  trade-offs, and abandoned approaches that illuminate the current shape.
 
-These points are a checklist for the writer, not an outline for the reader.
-Write the comment in whatever order flows best.
+File-scale specifics:
 
-- A worked call and its result, serialization of most important data contract, a short snippet, a data-flow sketch, or a walk through one request often teach more than a paragraph describing the same thing, and belong in the header when they do.
-
-- Understanding why what this file does is important to the wider system may require exploring the wider system.
-
-- If the existing file does not have a file header comment either leave off or create a comment that builds an understanding of what the entire file does. When adding feature X to a file that doesn't contain a file header comment don't document only feature X in the file header.
-
-- If a file's purpose is clear without documentation it doesn't need header comment
+- Understanding why this file matters to the wider system may require
+  exploring the wider system.
+- If the existing file has no header, either leave it off or write one that
+  builds an understanding of the entire file. When adding feature X to a file
+  without a header, don't document only feature X.
+- If a file's purpose is clear without documentation, it needs no header.
   - Example: `utils.py` contains utility functions
   - Example: `server_config.json` contains configuration for server X
   - Example: `thing_test.rs` contains tests for thing
-
-- The header is the file-scale counterpart of the component-level format in [`.agents/skills/layering/CONTEXT-FORMAT.md`](../../.agents/skills/layering/CONTEXT-FORMAT.md): its Language, Requirements, Spec, and Design sections are the four points above.
-
-- Test: Is what I'm trying to describe just a re-statement of the code? If so, leave it to the code. Is it an answer to something that can't be in the code — why this component uses design X over Y — or something the code states only diffusely? Then the description earns its place.
-
-- Test: could a reader who saw only this header predict how the file behaves at its boundary and why?

@@ -15,16 +15,16 @@ Sessions accrete requirements: the user asks for one thing, the agent infers thr
 
 2. **Dispatch the cop.** A read-only sub-agent gets the ledger, the user's original ask verbatim, the list of files the plan touches, and section 3 below. The session agent spent the session accumulating these requirements and is invested in them; a fresh context is the better skeptic.
 
-3. **Grade.** The cop thinks in the frame of [CONTEXT-FORMAT.md](../layering/CONTEXT-FORMAT.md) whether or not the repo has `CONTEXT.md` files: a requirement is a need received from the level above, distinct from the spec that answers it and the design that delivers it — a "requirement" that names a mechanism or has no level above asking for it is already suspect. For evidence of what the system commits to today, read whatever the repo offers at the right altitude — `CONTEXT.md` trees where they exist, narrative file headers (`docs/style/always.md`), READMEs, and code. For each row: **who needs it, what it drags in** (spec surface, design decisions forced, code, tests, upkeep — a changed boundary ripples to every caller), **and what breaks if we just don't** ("nothing, today" is a common and legitimate answer). One verdict each, with one line of evidence:
+3. **Grade.** The cop thinks in the frame of the [component lens](../../../docs/component-lens.md): a requirement is a need received from the level above, distinct from the spec that answers it and the design that delivers it — a "requirement" that names a mechanism or has no level above asking for it is already suspect. For evidence of what the system commits to today, read whatever the repo offers: narrative file headers (`docs/style/always.md`), READMEs, docs, and code. For each row: **who needs it, what it drags in** (spec surface, design decisions forced, code, tests, upkeep — a changed boundary ripples to every caller), **and what breaks if we just don't** ("nothing, today" is a common and legitimate answer). One verdict each, with one line of evidence:
    - **KEEP** — traced to a real need, cost proportionate.
    - **CUT** — nobody needs it, its cascade dwarfs what breaks without it, it's already met, or it belongs to another component. Say what breaks and, if it's real-but-not-now, what trigger would revive it.
    - **SHARPEN** — real need, dumb statement: a mechanism posing as a need, unfalsifiable ("fast", "robust"), or generality nobody asked for. Propose the narrow restatement.
 
-   The usual suspects: premature generality, compatibility with nothing, unneeded backwards compatibility, "while we're here", symmetry, an example read as a requirement, "best practice". A ledger that's all KEEPs means the cop didn't do the job.
+   The usual suspects: premature generality, unneeded backwards compatibility, "while we're here", symmetry, an example read as a requirement, "best practice". A ledger that's all KEEPs means the cop didn't do the job.
 
 4. **Decide.** Put every CUT and SHARPEN to the user as a `/grilling`-style round, with the evidence and a recommendation. The user decides; never cut or overrule silently.
 
-5. **Record.** Write survivors and cuts into whatever the session produces — the plan, or the `CONTEXT.md` Requirements section (cuts as non-goals) in a design session. An unwritten cut gets re-inferred by the next agent.
+5. **Record.** Write survivors and cuts (cuts as non-goals) into whatever the session produces — usually the plan. An unwritten cut gets re-inferred by the next agent.
 
 ## Calibration
 

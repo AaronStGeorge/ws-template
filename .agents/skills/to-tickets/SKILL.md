@@ -1,24 +1,22 @@
 ---
 name: to-tickets
-description: Break a plan, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker — edges as text in one file per ticket locally, or native blocking links on a real tracker.
+description: Break a plan, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, written to tickets/ with the new_ticket.py CLI.
 disable-model-invocation: true
 ---
 
 # To Tickets
 
-Break a plan, spec, or conversation into a set of **tickets** — tracer-bullet vertical slices, each declaring the tickets that **block** it.
-
-The issue tracker and triage label vocabulary should have been provided to you — run `/setup-matt-pocock-skills` if not.
+Break a plan, or conversation into a set of **tickets** — tracer-bullet vertical slices, each declaring the tickets that **block** it.
 
 ## Process
 
 ### 1. Gather context
 
-Work from whatever is already in the conversation context. If the user passes a reference (an unresolved question in a CONTEXT.md, an issue number or URL) as an argument, fetch it and read its full body and comments.
+Work from whatever is already in the conversation context. If the user passes a reference (an issue number or URL) as an argument, fetch it and read its full body and comments.
 
 ### 2. Explore the codebase (optional)
 
-If you have not already explored the codebase, do so to understand the current state of the code. Ticket titles and descriptions should use the project's domain glossary vocabulary, and respect ADRs in the area you're touching.
+If you have not already explored the codebase, do so to understand the current state of the code. Ticket titles and descriptions should use the project's domain glossary vocabulary, and understand the current change through the frame of design, requirements, and spec from the [component lens](../../../docs/component-lens.md).
 
 Look for opportunities to prefactor the code to make the implementation easier. "Make the change easy, then make the easy change."
 
@@ -45,7 +43,7 @@ Present the proposed breakdown as a numbered list. For each ticket, show:
 
 - **Title**: short descriptive name
 - **Blocked by**: which other tickets (if any) must complete first
-- **What it delivers**: the end-to-end behaviour this ticket makes work
+- **What it delivers**: the end-to-end behavior this ticket makes work
 
 Ask the user:
 
@@ -55,37 +53,31 @@ Ask the user:
 
 Iterate until the user approves the breakdown.
 
-### 5. Publish the tickets to the configured tracker
+### 5. Publish the tickets
 
-Publish the approved tickets. **How** depends on the tracker `/setup-matt-pocock-skills` configured — the tickets are the same either way, only the shape of the blocking edges changes:
+Publish each approved ticket with the skill's CLI, in dependency order (blockers first) so ids ascend with the order work can start. Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
-- **Local files** → write one file per ticket under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order (blockers first). Each file's "Blocked by" lists the numbers/titles it depends on. Use the per-ticket file template below — one ticket per file, never a single combined file.
-- **A real issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Apply the `ready-for-agent` triage label unless instructed otherwise — the tickets are agent-grabbable by construction.
+```bash
+.agents/skills/to-tickets/scripts/new_ticket.py \
+  --title "Tiered CI" \
+  --pipeline default \
+  --description "$(cat <<'EOF'
+## What to build
+...
+EOF
+)"
+# -> tickets/N001_tiered-ci.json
+```
 
-Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
+- `--title` — the ticket title; also names the workspace `scripts/new_workspace.py --ticket tickets/N001_tiered-ci.json` creates.
+- `--pipeline` — free-form string naming the pipeline the ticket runs through.
+- `--description` — the markdown body, using the template below. Written verbatim to `tickets/N001_tiered-ci.md` beside the JSON.
 
-Do NOT close or modify any parent issue.
+The CLI writes `tickets/NXXX_<slug>.json` (`title`, `status: open`, `pipeline`, `description` → the sibling `.md`) at the workspace root and prints the JSON path. It works from inside a `.workspaces/<name>/` tree too; tickets still land at the root.
 
-<local-ticket-template>
-
-# <NN> — <Ticket title>
-
-**What to build:** the end-to-end behaviour this ticket makes work, from the user's perspective — not a layer-by-layer implementation list.
-
-**Blocked by:** the numbers/titles of the tickets that gate this one, or "None — can start immediately".
-
-**Status:** ready-for-agent
-
-- [ ] Acceptance criterion 1
-- [ ] Acceptance criterion 2
-
-</local-ticket-template>
+**Blocked-by is not yet supported by the CLI.** Do not put the relationship in the ticket. After publishing, report the edges to the user in your summary instead, e.g. `N003 blocked by N001, N002`.
 
 <issue-template>
-
-## Parent
-
-A reference to the parent issue on the tracker (if the source was an existing issue, otherwise omit this section).
 
 ## What to build
 
