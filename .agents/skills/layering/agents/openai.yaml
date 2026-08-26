@@ -1,0 +1,5 @@
+interface:
+  display_name: "Layering"
+  short_description: "Explore the components of a system along a particular vector of inquiry."
+policy:
+  allow_implicit_invocation: false
