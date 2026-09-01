@@ -71,14 +71,15 @@ def build(
     """Configure + build llama.cpp with GGML_HRX, then write its ``.envrc``.
 
     The HRX backend resolves ``hrx`` and ``loomc`` as installed CMake packages
-    (the HrxPublicDist component installed by :mod:`builds.hrx_system`), pinned in
-    via ``CMAKE_PREFIX_PATH``; the ROCm toolchain is pinned through absolute
-    compiler paths, mirroring :func:`builds.hrx_system._configure_argv`. Nothing
-    in the configure needs the ``.envrc`` sourced (the kernel-corpus generator is
-    stdlib-only Python), so the ``.envrc`` -- runtime-only wiring: ROCm SDK paths,
-    the hrx install's shared libs, and an optional GPU pin -- is written after a
-    successful build. Configure is skipped when ``<build>`` already holds a cache
-    configured with an identical command line (recorded in a marker).
+    (the HrxPublicDist and Loom tool components installed by
+    :mod:`builds.hrx_system`), pinned in via ``CMAKE_PREFIX_PATH``; the ROCm
+    toolchain is pinned through absolute compiler paths, mirroring
+    :func:`builds.hrx_system._configure_argv`. Nothing in the configure needs the
+    ``.envrc`` sourced (the kernel-corpus generator is stdlib-only Python), so the
+    ``.envrc`` -- runtime-only wiring: ROCm SDK paths, the hrx install's shared
+    libs, and an optional GPU pin -- is written after a successful build. Configure
+    is skipped when ``<build>`` already holds a cache configured with an identical
+    command line (recorded in a marker).
     """
     if rocm.rocm_path is None:
         raise ValueError(

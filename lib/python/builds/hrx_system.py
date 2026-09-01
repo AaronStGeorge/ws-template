@@ -11,9 +11,15 @@ from .rocm import RocmInstallResult
 
 PROJECT = "hrx-system"
 
-# Component installed by the HRX CMake build for downstream consumers (the
-# public HRX + loomc distribution: runtime/dev CMake packages and shared libs).
+# Components installed by the HRX CMake build for downstream consumers: the
+# public HRX + loomc distribution and the tools llama.cpp uses to build its
+# binary Loom kernel corpus and run Loom benchmarks.
 PUBLIC_DIST_COMPONENT = "HrxPublicDist"
+LOOM_TOOL_INSTALL_COMPONENTS = (
+    "IREETool-loom-link",
+    "IREETool-loom-format",
+    "IREETool-iree-benchmark-loom",
+)
 TESTS_DIST_COMPONENT = "HrxTestsDist"
 
 
@@ -32,7 +38,7 @@ class HrxSystemKnobs(BuildKnobs):
     build_type: str = "RelWithDebInfo"
     jobs: int = 0  # 0 -> let Ninja decide; >0 passes --parallel <jobs>
     loom_build: bool = True  # build the Loom compiler/link tooling (-DLOOM_BUILD=ON)
-    install: bool = True  # install the public HRX dist after a successful build
+    install: bool = True  # install the public HRX dist and downstream Loom tools
     install_tests: bool = False  # also install the HRX test tree (HrxTestsDist)
 
 
@@ -41,10 +47,10 @@ class HrxSystemBuildResult(BuildResult):
     """Result of building the HRX System CMake project (configure + compile [+ install]).
 
     Testing is the assembly line's responsibility — the build only compiles (and
-    optionally installs the public distribution). ``build_exit_code`` is ``None``
-    when the build was skipped because configure failed; ``install_exit_code`` is
-    ``None`` when install was not requested or was skipped because the build
-    failed.
+    optionally installs the public distribution and downstream Loom tools).
+    ``build_exit_code`` is ``None`` when the build was skipped because configure
+    failed; ``install_exit_code`` is ``None`` when install was not requested or
+    was skipped because the build failed.
     """
 
     knobs: HrxSystemKnobs  # narrow the base's knobs field to this project's type
@@ -65,19 +71,19 @@ class HrxSystemBuildResult(BuildResult):
 
     @property
     def installed(self) -> bool:
-        """True when the public dist was installed without error."""
+        """True when the public dist and downstream Loom tools installed cleanly."""
         return self.install_exit_code == 0
 
 
 def build(knobs: HrxSystemKnobs, rocm: RocmInstallResult) -> HrxSystemBuildResult:
     """Configure and build the HRX System CMake project (and optionally install it).
 
-    Output lands in ``<source_dir>/build``; the public dist, when installed, goes
-    to ``<source_dir>/install`` (a sibling of ``build/``). The ROCm toolchain from
-    the upstream ``rocm`` install result is pinned entirely through the CMake
-    configure flags (absolute compiler paths + ``IREE_ROCM_PATH``); the toolchain
-    binaries self-resolve their shared libraries via RUNPATH, so the build inherits
-    the ambient process environment unchanged.
+    Output lands in ``<source_dir>/build``; the public dist and downstream Loom
+    tools, when installed, go to ``<source_dir>/install`` (a sibling of
+    ``build/``). The ROCm toolchain from the upstream ``rocm`` install result is
+    pinned entirely through the CMake configure flags (absolute compiler paths +
+    ``IREE_ROCM_PATH``); the toolchain binaries self-resolve their shared libraries
+    via RUNPATH, so the build inherits the ambient process environment unchanged.
 
     Configure is skipped when ``<build>`` already holds a CMake cache configured
     with an identical command line (recorded in a marker), so a no-op re-run is
@@ -113,12 +119,28 @@ def build(knobs: HrxSystemKnobs, rocm: RocmInstallResult) -> HrxSystemBuildResul
             build_argv += ["--parallel", str(knobs.jobs)]
         build_rc = _run(build_argv, log_parts)
 
-        if build_rc == 0 and knobs.install:
+        build_succeeded = build_rc == 0
+        install_requested = knobs.install
+        should_install = build_succeeded and install_requested
+        if should_install:
             install_path = src / "install"
-            install_rc = _run(
-                _install_argv(out, install_path, PUBLIC_DIST_COMPONENT), log_parts
+            install_components = (
+                PUBLIC_DIST_COMPONENT,
+                *LOOM_TOOL_INSTALL_COMPONENTS,
             )
-            if install_rc == 0 and knobs.install_tests:
+            for component in install_components:
+                install_rc = _run(
+                    _install_argv(out, install_path, component), log_parts
+                )
+                if install_rc != 0:
+                    break
+
+            downstream_components_installed = install_rc == 0
+            tests_install_requested = knobs.install_tests
+            should_install_tests = (
+                downstream_components_installed and tests_install_requested
+            )
+            if should_install_tests:
                 install_rc = _run(
                     _install_argv(out, src / "install-tests", TESTS_DIST_COMPONENT),
                     log_parts,
