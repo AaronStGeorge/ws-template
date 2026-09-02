@@ -8,3 +8,8 @@ build/
 
 # Ignore devcontainers, usually machine specific
 .devcontainer
+
+# imp tool state and build
+build/
+.imp/
+impd.json

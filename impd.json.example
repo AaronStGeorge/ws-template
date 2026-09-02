@@ -1,0 +1,7 @@
+{
+  "imps": {
+    "echo": "test/echo_imp.py",
+    "fix-llama-bump": "scripts/ggml-staging-automation/imps/fix-llama-bump/imp.py",
+    "repoint-llama-bump": "scripts/ggml-staging-automation/imps/repoint-llama-bump/imp.py"
+  }
+}
