@@ -68,6 +68,49 @@ Before adding validation, identify the external source that can violate the
 invariant. If the only answer is “a bug in our checked-in producer,” fix or
 test the producer instead.
 
+### Comment the why at block scale
+
+Between the narrative header (file scale) and the code itself (line scale)
+sits block scale: a type, a function, a stanza inside a longer flow. Give
+each nontrivial block a short comment carrying what the code alone cannot:
+
+- **The role in the story** — what this block is for, when its purpose isn't
+  evident from its name and shape ("the manual door: judgment-call
+  relaunches come through here").
+- **The contract being honored** — name the documented term or decision a
+  line exists to satisfy ("stdout carries no meaning in the contract and is
+  discarded"; "per the recorded no-persistence decision").
+- **The load-bearing invariant** — consequences that are invisible at the
+  line ("the 409 here is what makes re-emission idempotent, never
+  duplicated work").
+- **The road not taken** — why the obvious alternative was rejected ("one
+  mutex; the traffic is far too small to earn anything finer-grained").
+- **The flow's shape** — one comment at the top of a long function naming
+  its phases ("validate → claim the id → wire the process → hand the wait
+  to a goroutine").
+
+The test is the same as the component lens's: a comment that restates what
+the line already says is noise — delete it, or rename the code until the
+comment isn't needed. A comment earns its place only by answering a
+question the reader would otherwise have to reconstruct from the wider
+system.
+
+✅ Preferred:
+
+```go
+// Claim the Run Id: check-and-insert under the mutex so two concurrent
+// launches of the same Id can't both win. The 409 here is load-bearing —
+// it is what lets condition scripts re-emit the same launch safely.
+d.mu.Lock()
+```
+
+❌ Avoid:
+
+```go
+// Lock the mutex and check if the id is in the map.
+d.mu.Lock()
+```
+
 ### Open each implementation file with a narrative header
 
 Every substantial implementation file starts with a doc comment, in the
