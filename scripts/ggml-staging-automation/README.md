@@ -129,7 +129,10 @@ Details the implementation settled:
   consumes in place of the fork — pushed to the PR's head branch.
   hrx-system is untouched, per the never-alone rule.
 - `gh pr checks <bump-pr-url> --watch --interval 60` is the verdict: its
-  exit code becomes the Run's outcome.
+  exit code becomes the Run's outcome. The watch is gated on the PR's
+  head being the pushed commit with a non-empty check rollup — started
+  earlier, it returns the previous head's stale green within seconds.
+  The gate's bounded wait failing is a failed Run, never a guessed green.
 - On red, codex is the diagnosis agent (`codex exec` with a schema-forced
   handoff, `{"diagnosis": <string>}` and nothing else) under an explicit
   change-nothing rule; the diagnosis is printed to the Run log before the

@@ -92,7 +92,7 @@ FORK_PUSH_URL = "git@github.com:AaronStGeorge/llama.cpp.git"
 
 # Cloned directly — the imp is self-contained and depends on no local
 # checkout of the staging repo.
-STAGING_REPO_URL = "https://github.com/ROCm/ggml-staging-automation.git"
+STAGING_REPO_URL = "git@github.com:ROCm/ggml-staging-automation.git"
 
 # The spike's schema plus `upstream_pr`: the one machine-read field of the
 # handoff — non-null is what arms the reconcile watch after the agent exits.

@@ -28,9 +28,12 @@ never-alone rule — pushed to the PR's head branch.
 Then CI decides: `gh pr checks --watch` runs until the checks settle, and
 its exit code is the verdict. Green is expected, because the identical
 change was already validated on this PR via the fork; that expectation is
-why there are no retry semantics. (Checks can take a beat to attach right
-after a push; the watch is happy-path-accepted rather than engineered
-around — a mistimed green is a human-visible oddity, not a loop hazard.)
+why there are no retry semantics. Checks take a beat to attach after a
+push, and until they do the PR still reports the previous head's checks —
+a watch started too early returns that stale green in seconds (it
+happened: PR 57's repoint run went green before its CI had begun). So the
+watch is gated: poll until the PR's head is the pushed commit and its
+rollup holds checks, within a bounded wait that fails the Run loudly.
 Red means launching an agent whose only job is a diagnosis written to
 stderr — a guess at what went wrong and what a human should check, under
 an explicit change-NOTHING rule (no commits, no pushes, no fixes) — and
@@ -48,6 +51,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 # Both patterns are the provenance gate: argv normally comes from
@@ -66,7 +70,7 @@ STAGING_PR_URL = re.compile(
 
 # Cloned directly — the imp is self-contained and depends on no local
 # checkout of the staging repo.
-STAGING_REPO_URL = "https://github.com/ROCm/ggml-staging-automation.git"
+STAGING_REPO_URL = "git@github.com:ROCm/ggml-staging-automation.git"
 
 # The canonical submodule coordinates the repoint restores: the fix run
 # left .gitmodules pointing at the personal fork, and these two values are
@@ -115,6 +119,56 @@ def run_to_log(argv, **kwargs):
     self-contained by design.
     """
     return subprocess.run(argv, stdout=sys.stderr.fileno(), **kwargs)
+
+
+# Checks attach to a fresh head within seconds normally; minutes only when
+# GitHub is degraded. Past this the Run fails rather than guessing.
+CHECKS_ATTACH_TIMEOUT_SECONDS = 600
+CHECKS_ATTACH_POLL_SECONDS = 15
+
+
+def wait_for_checks_to_attach(bump_pr_url, pushed_sha):
+    """Block until the bump PR's head is `pushed_sha` and has checks.
+
+    `gh pr checks` reads the PR's current head and its statusCheckRollup;
+    right after a push GitHub can still serve the previous head, or the new
+    head with an empty rollup, and a watch started then returns the old
+    verdict almost immediately. Both facts must hold before the watch means
+    anything. Past the bounded wait, exit nonzero: a Run that cannot tell
+    what CI thinks must summon the human, never guess green.
+    """
+    deadline = time.monotonic() + CHECKS_ATTACH_TIMEOUT_SECONDS
+    while True:
+        view = json.loads(
+            subprocess.run(
+                ["gh", "pr", "view", bump_pr_url,
+                 "--json", "headRefOid,statusCheckRollup"],
+                check=True,
+                stdout=subprocess.PIPE,
+                text=True,
+            ).stdout
+        )
+        head_is_pushed_commit = view["headRefOid"] == pushed_sha
+        rollup_has_checks = len(view["statusCheckRollup"]) > 0
+        checks_are_attached = head_is_pushed_commit and rollup_has_checks
+        if checks_are_attached:
+            print(
+                f"checks attached to {pushed_sha[:8]}: "
+                f"{len(view['statusCheckRollup'])} in the rollup",
+                file=sys.stderr,
+            )
+            return
+
+        timed_out = time.monotonic() >= deadline
+        if timed_out:
+            raise SystemExit(
+                f"no checks attached to pushed commit {pushed_sha} on "
+                f"{bump_pr_url} within {CHECKS_ATTACH_TIMEOUT_SECONDS}s "
+                f"(head seen: {view['headRefOid'][:8]}, rollup size "
+                f"{len(view['statusCheckRollup'])}); cannot take a CI "
+                "verdict"
+            )
+        time.sleep(CHECKS_ATTACH_POLL_SECONDS)
 
 
 def main():
@@ -237,11 +291,19 @@ def main():
         check=True,
     )
     run_to_log(["git", "push", "origin", head_branch], cwd=clone, check=True)
+    pushed_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=clone,
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
 
     # CI is the verdict: `gh pr checks --watch` follows the checks to
     # completion and exits 0 iff every check passed — that fact alone
-    # decides the Run. Checks may take a beat to attach right after the
-    # push; happy-path-accepted per the header.
+    # decides the Run. The watch only means something once the checks
+    # belong to the commit just pushed; the gate is the header's story.
+    wait_for_checks_to_attach(bump_pr_url, pushed_sha)
     checks = run_to_log(
         ["gh", "pr", "checks", bump_pr_url, "--watch", "--interval", "60"]
     )
