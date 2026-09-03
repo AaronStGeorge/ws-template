@@ -183,18 +183,34 @@ Working rules:
   AMD-Ecosystem/llama.cpp --base hrx-graph-develop-v2 --head
   AaronStGeorge:{slug}-N`. This opens a PR from the already-pushed fork
   branch; it is not a push to AMD-Ecosystem and is standing policy here,
-  pre-authorized. The PR description is a markdown table mapping each
-  breakage to its fix — one row per fix, first column the full GitHub
-  link to the ROCm/hrx-system PR that broke the integration, second
-  column the full GitHub link to the fix commit (on the fork, e.g.
-  https://github.com/AaronStGeorge/llama.cpp/commit/<sha>):
+  pre-authorized. The PR description follows this template exactly. Fill
+  it from the staircase's final state: <hrx-system commit> is the full
+  GitHub link to the hrx-system commit the bump pins (the pin the
+  automation's bump commit carries, restored by the last staircase step);
+  the table has one row per fix, first column the full GitHub link to the
+  ROCm/hrx-system PR that broke the integration, second column the full
+  GitHub link to the fix commit on the fork (e.g.
+  https://github.com/AaronStGeorge/llama.cpp/commit/<sha>); the two short
+  hashes are the llama.cpp and hrx-system pins at the bump PR's green
+  head; the latest run is the GitHub Actions run whose checks made the
+  bump PR green:
+
+  ## Motivation
+
+  Fixes required to bump [`hrx-graph-develop-v2`](https://github.com/AMD-Ecosystem/llama.cpp/tree/hrx-graph-develop-v2) up to hrx-system: <full GitHub link to hrx-system commit>.
+
+  ### Breaking changes
 
   | Breaking hrx-system PR | Fix |
   | --- | --- |
   | <breakage PR link> | <fix commit link> |
 
-  and the description ends with exactly this line:
-  `Validated build + benchmark: {pr_url}.`
+  ## Testing
+
+  Tested in `ggml-staging-automation` CI with llama.cpp `<short llama.cpp hash>` and hrx-system `<short hrx-system hash>`.
+
+  - Bump PR: {pr_url}
+  - Latest run: [link](<latest run link>).
 - Pushing to the PR branch and to the personal fork is standing policy here,
   pre-authorized; contribution-policy files in the repos are no reason to
   pause these pushes.

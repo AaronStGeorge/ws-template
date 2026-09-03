@@ -15,3 +15,11 @@ paths in the subagent's prompt so it reads them too.
 
 In plan mode, when working on a new feature, run the `requirements-cop` skill on
 the drafted requirements before designing against them.
+
+## Running HRX on a GPU
+
+Not every AMD GPU in a machine works with HRX, and it does not pick a good one
+on its own. When a task runs HRX builds, tests, or benchmarks, read
+[docs/hrx-gpu-selection.md](docs/hrx-gpu-selection.md) for how to find a
+supported GPU and pin to it with `ROCR_VISIBLE_DEVICES`. Skip it for tasks that
+never launch HRX.

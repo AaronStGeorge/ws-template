@@ -46,25 +46,32 @@ Arguments: one — the bump PR URL. Launched by
 number).
 
 Observable behavior: it derives everything from its argument and live
-GitHub state — no ticket, no standing context document. Upstream fixes are
-consumed, never re-derived, with the check scoped by the bump itself: the
-bump pins llama.cpp at upstream's head as of bump time, so a fix merged
-before that pin is already in the tree (no staircase step re-proves it),
-and a fix merged after it is consumed by a plain llama.cpp pin bump. It
-repairs the breakage behind the PR's red CI and drives the PR green as a
+GitHub state — no ticket, no standing context document.
+
+Upstream fixes are consumed, never re-derived, with the check scoped by the
+bump itself: the bump pins llama.cpp at upstream's head as of bump time, so
+a fix merged before that pin is already in the tree (no staircase step
+re-proves it), and a fix merged after it is consumed by a plain llama.cpp
+pin bump.
+
+It repairs the breakage behind the PR's red CI and drives the PR green as a
 staircase of green llama.cpp bumps — each step pairs a llama.cpp fix with
 the hrx break it answers, and the last step pins hrx-system directly at
 the bump's original target (the restoration rides the pair). The
 hrx-system pin is never committed alone — it belongs to the automation's
 bump — and the common single-missing-fix case degenerates to exactly one
-llama.cpp bump commit with hrx untouched. If and only if the repair
-requires a llama.cpp change upstream still lacks, it: pushes that change
-to the personal fork, retargets the bump PR's `.gitmodules` at the fork so
-the fix is validated in the PR's own CI, opens the upstream PR for the
-durable version — its description a table mapping each breaking hrx-system
-PR (GitHub link) to its fix commit (GitHub link), ending with
-`Validated build + benchmark: <staging PR link>.` — and arms the reconcile
-watch before exiting:
+llama.cpp bump commit with hrx untouched.
+
+If and only if the repair requires a llama.cpp change upstream still
+lacks, it: pushes that change to the personal fork, retargets the bump
+PR's `.gitmodules` at the fork so the fix is validated in the PR's own CI,
+opens the upstream PR for the durable version, and arms the reconcile
+watch before exiting. The upstream PR's description is a fixed template: a
+Motivation section naming the hrx-system commit the bump targets (GitHub
+link), a Breaking changes table mapping each breaking hrx-system PR (GitHub
+link) to its fix commit (GitHub link), and a Testing section with the short
+llama.cpp and hrx-system hashes CI validated, the bump PR link, and the
+green Actions run link. The reconcile watch is armed with:
 
 ```sh
 impwatch arm --clear -- <ws>/scripts/ggml-staging-automation/conditions/pr_merged.py <upstream-pr-url> <bump-pr-url>

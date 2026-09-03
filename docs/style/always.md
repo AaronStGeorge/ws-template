@@ -111,6 +111,21 @@ d.mu.Lock()
 d.mu.Lock()
 ```
 
+### One decision per paragraph
+
+Prose here is read the way code is: a reviewer checks one rule at a time,
+and an agent follows one rule at a time. Give each rule, decision, or
+mechanism its own paragraph, and open it with the sentence that states it.
+
+The test is the same as for compound conditions: if a paragraph carries
+several things a reader might want to quote, question, or apply separately,
+split it. A paragraph past eight or so lines is a smell; a paragraph whose
+sentences are joined by "and", dashes, or parentheticals to hold more ideas
+is the thing itself.
+
+This applies to READMEs, design records, narrative headers, docstrings, and
+agent instructions alike.
+
 ### Open each implementation file with a narrative header
 
 Every substantial implementation file starts with a doc comment, in the
