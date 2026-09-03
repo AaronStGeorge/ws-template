@@ -1,10 +1,11 @@
 """Build ``ggml-staging-automation`` by driving its own ``scripts/hrx`` tooling.
 
-The staging repo already owns the *how*: ``scripts/hrx/build_all.py`` fetches the
-pinned TheRock ROCm artifacts, builds and installs hrx-system, builds and
-installs llama.cpp with ``GGML_HRX`` (and optionally ``GGML_VULKAN``), then
-validates the install. ``scripts/hrx/build_vulkan_sdk.py`` builds the Vulkan
-SDK that the Vulkan backend needs. This module only sequences those scripts and
+The staging repo already owns the *how*: ``scripts/hrx/build/build_all.py``
+fetches the pinned TheRock ROCm artifacts, builds and installs hrx-system,
+builds and installs llama.cpp with ``GGML_HRX`` (and optionally
+``GGML_VULKAN``), then validates the install.
+``scripts/hrx/build/build_vulkan_sdk.py`` builds the Vulkan SDK that the
+Vulkan backend needs. This module only sequences those scripts and
 takes care of what a fresh checkout / worktree lacks:
 
 1. ``git submodule update --init hrx-system llama.cpp``
@@ -44,12 +45,12 @@ PIP_EXTRAS = ("cmake==3.31.6", "ninja")
 class GgmlStagingAutomationKnobs(BuildKnobs):
     """Knobs for the staging build. ``source_dir`` is the ggml-staging-automation checkout."""
 
-    # --- forwarded to scripts/hrx/build_all.py ---
+    # --- forwarded to scripts/hrx/build/build_all.py ---
     build_type: str = "Release"  # llama.cpp CMAKE_BUILD_TYPE
     hrx_build_type: str = "Release"  # hrx-system CMAKE_BUILD_TYPE
     vulkan: bool = True  # build build/vulkan-sdk and enable GGML_VULKAN
     skip_fetch: bool = False  # reuse an existing build/rocm-root
-    skip_validate: bool = False  # skip scripts/hrx/validate_install.py
+    skip_validate: bool = False  # skip scripts/hrx/build/validate_install.py
     # Extra args passed verbatim to build_all.py, which forwards its own unknown
     # args to build_hrx_system.py as raw CMake args (e.g. -DIREE_HAL_AMDGPU_TARGETS=gfx1151).
     extra_args: tuple[str, ...] = ()
@@ -104,12 +105,12 @@ def build(knobs: GgmlStagingAutomationKnobs) -> GgmlStagingAutomationBuildResult
         steps.append(
             (
                 "vulkan-sdk",
-                [[str(python), "scripts/hrx/build_vulkan_sdk.py", "--vulkan-sdk-dir", str(vulkan_sdk)]],
+                [[str(python), "scripts/hrx/build/build_vulkan_sdk.py", "--vulkan-sdk-dir", str(vulkan_sdk)]],
             )
         )
     build_all = [
         str(python),
-        "scripts/hrx/build_all.py",
+        "scripts/hrx/build/build_all.py",
         "--build-type",
         knobs.build_type,
         "--hrx-build-type",
