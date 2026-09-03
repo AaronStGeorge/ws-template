@@ -52,6 +52,11 @@ self-report, becomes the exit code.
 
 Prep performed before codex starts, and why (spike-proven):
 
+- Precondition: ``codex login status`` must pass. codex can go weeks
+  between uses here and its ChatGPT login can lapse in between; failing
+  before any clone makes the Run's log say exactly that, instead of a
+  codex startup error buried after the prep. A failed Run is the human's
+  summons — ``codex login``, then relaunch under a fresh Run Id.
 - The staging work branch is the PR's ``headRefName`` via ``gh`` — a
   property of the PR, never imp config.
 - Only ggml-staging-automation is cloned — directly from GitHub — and the
@@ -270,6 +275,23 @@ def main():
             f"not a ROCm/ggml-staging-automation PR URL: {args.pr_url}"
         )
     pr_url = url_match.group(0)
+
+    # Precondition, before anything is cloned: a codex binary missing from
+    # PATH is the same verdict as a stale login — codex exec would die the
+    # same way. The header's prep bullets carry the why.
+    try:
+        codex_is_usable = subprocess.run(
+            ["codex", "login", "status"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode == 0
+    except FileNotFoundError:
+        codex_is_usable = False
+    if not codex_is_usable:
+        raise SystemExit(
+            "codex is not usable (`codex login status` failed or codex is "
+            "not on PATH); run `codex login` and relaunch"
+        )
 
     # slug == the Run Id convention condition.py emits — the trick that
     # lets fork branches (`{slug}-1`, …) trace to their Run without this

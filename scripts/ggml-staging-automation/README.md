@@ -36,13 +36,19 @@ workspace root, with a gitignored config naming these imps:
 ```sh
 impd --config impd.json                # from the workspace root
 impwatch arm -- $PWD/scripts/ggml-staging-automation/imps/fix-llama-bump/condition.py
-impwatch tick                          # wire into cron for a live loop
+impwatch tick                          # one tick by hand
+setsid nohup scripts/ggml-staging-automation/tick-loop.sh \
+    > .imp/tick-loop.log 2>&1 < /dev/null &   # the live loop: a tick every 5 min
 ```
 
-One-time setup: the imp tools build into `build/bin` (see
-[tools/README.md](../../tools/README.md)); `impwatch` must be on PATH —
-the fix imp invokes it bare to arm its reconcile watch. All imp
-state lives in this workspace's `.imp/`.
+`tick-loop.sh` is the cron substitute (the devcontainer has no crond):
+it ticks every five minutes from the workspace root and nothing else.
+
+Setup is the workspace `.envrc`: on every directory entry it builds the
+imp tools into `build/bin` (see [tools/README.md](../../tools/README.md))
+and puts them on PATH — `impwatch` must resolve bare, since the fix imp
+invokes it that way to arm its reconcile watch. All imp state lives in
+this workspace's `.imp/`.
 
 ## `fix-llama-bump` (`imps/fix-llama-bump/imp.py`)
 
@@ -89,6 +95,10 @@ change simply ends green, arming nothing.
 
 Details the implementation settled:
 
+- Precondition: `codex login status` must pass before anything is
+  cloned. codex can go weeks between uses and its login can lapse; the
+  Run fails with a log line saying so, and the human runs `codex login`
+  and relaunches under a fresh Run Id.
 - The slug naming the run workspace and prefixing the numbered fork
   branches is `fix-bump-pr-<N>`, derived from the URL — deliberately
   identical to the Run Id, so fork branches (`fix-bump-pr-46-1`, …) trace
