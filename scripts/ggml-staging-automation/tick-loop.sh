@@ -5,10 +5,8 @@
 # detached from the workspace root, daemon first (impd.json is the
 # gitignored imp map; copy impd.json.example):
 #
-#     setsid nohup impd --config impd.json \
-#         > .imp/impd.out 2>&1 < /dev/null &
-#     setsid nohup scripts/ggml-staging-automation/tick-loop.sh \
-#         > .imp/tick-loop.log 2>&1 < /dev/null &
+#     setsid impd --config impd.json > .imp/impd.out 2>&1 < /dev/null &
+#     setsid scripts/ggml-staging-automation/tick-loop.sh > .imp/tick-loop.log 2>&1 < /dev/null &
 #
 # Daemon first matters: impwatch drops a clearing row when it fires, not
 # when the launch is delivered (a flaky daemon must not make a one-shot
