@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Imp: drive a failing ggml-staging-automation bump PR to green CI.
 
-Launched by its paired sensor, ../../conditions/red_bump_prs.py; the
+Launched by its paired sensor, the condition.py beside this file; the
 ggml-staging-automation README (../../README.md) section `fix-llama-bump`
 is the authoritative boundary. Argv carries the bump PR URL — the whole
 input; everything else is derived from live GitHub state (no ticket, no
@@ -29,7 +29,7 @@ the outcome is the exit code and the narrative is stderr.
 
 Names: the slug that titles the /tmp workspace and prefixes the numbered
 llama.cpp fork branches is ``fix-bump-pr-<N>`` — deliberately identical
-to the Run Id convention red_bump_prs.py emits, so fork branches
+to the Run Id convention condition.py emits, so fork branches
 (``fix-bump-pr-46-1``, …) trace to their Run without this process ever
 being told its Run Id.
 
@@ -66,6 +66,11 @@ Prep performed before codex starts, and why (spike-proven):
   the fork-only rule mechanical for the default ``git push origin`` path —
   prose alone proved unreliable. This guards the accident, not a
   determined agent; proportionate for this experiment.
+- ``sync_pr_body.py`` copy (shared by both imps, one level up): the bump
+  PR's body names a llama.cpp pin the staircase moves; the agent runs
+  this after every push to the PR branch
+  to keep the body truthful, and the wrapper runs it once more after the
+  handoff as the backstop.
 - ``.venv`` symlink + ``build.py`` copy: local validation is minutes where
   a CI round is ~an hour, so the iterate loop leans on it. Shared-venv
   pip-leak trade accepted as before.
@@ -183,17 +188,20 @@ Working rules:
   AMD-Ecosystem/llama.cpp --base hrx-graph-develop-v2 --head
   AaronStGeorge:{slug}-N`. This opens a PR from the already-pushed fork
   branch; it is not a push to AMD-Ecosystem and is standing policy here,
-  pre-authorized. The PR description follows this template exactly. Fill
-  it from the staircase's final state: <hrx-system commit> is the full
-  GitHub link to the hrx-system commit the bump pins (the pin the
-  automation's bump commit carries, restored by the last staircase step);
-  the table has one row per fix, first column the full GitHub link to the
-  ROCm/hrx-system PR that broke the integration, second column the full
-  GitHub link to the fix commit on the fork (e.g.
-  https://github.com/AaronStGeorge/llama.cpp/commit/<sha>); the two short
-  hashes are the llama.cpp and hrx-system pins at the bump PR's green
-  head; the latest run is the GitHub Actions run whose checks made the
-  bump PR green:
+  pre-authorized. The PR description follows this template exactly,
+  filled from the staircase's final state:
+
+  - <hrx-system commit>: the full GitHub link to the hrx-system commit
+    the bump pins (the pin the automation's bump commit carries, restored
+    by the last staircase step).
+  - The table: one row per fix. First column the full GitHub link to the
+    ROCm/hrx-system PR that broke the integration; second column the full
+    GitHub link to the fix commit on the fork (e.g.
+    https://github.com/AaronStGeorge/llama.cpp/commit/<sha>).
+  - The two short hashes: the llama.cpp and hrx-system pins at the bump
+    PR's green head.
+  - The latest run: the GitHub Actions run whose checks made the bump PR
+    green.
 
   ## Motivation
 
@@ -218,6 +226,12 @@ Working rules:
 Iterate: after each push, watch the PR's checks with gh until they finish,
 read any failure, fix, push again. No round limit. Local validation first is
 cheaper than a CI round — `build.py` runs via `.venv/bin/python build.py`.
+After every push to the PR branch run `.venv/bin/python sync_pr_body.py
+{pr_url} --head "$(git rev-parse HEAD)"` from the ggml-staging-automation
+clone: it rewrites the PR body's llama.cpp row from the pushed commit, so
+the description never names a pin the branch does not have. `--head` is
+required right after a push — the PR API can report the previous head for
+a while.
 Stop only when CI is green, or when you are genuinely stuck without human
 input.
 
@@ -257,7 +271,7 @@ def main():
         )
     pr_url = url_match.group(0)
 
-    # slug == the Run Id convention red_bump_prs.py emits — the trick that
+    # slug == the Run Id convention condition.py emits — the trick that
     # lets fork branches (`{slug}-1`, …) trace to their Run without this
     # process ever being told its Run Id.
     slug = f"fix-bump-pr-{url_match.group(1)}"
@@ -317,6 +331,7 @@ def main():
     (wsdir / "CLAUDE.md").symlink_to(ws / "AGENTS.md")
     (wsdir / ".venv").symlink_to(ws / ".venv", target_is_directory=True)
     shutil.copy2(here / "build.py", wsdir / "build.py")
+    shutil.copy2(here.parent / "sync_pr_body.py", wsdir / "sync_pr_body.py")
 
     print(f"run workspace: {wsdir}", file=sys.stderr)
 
@@ -352,6 +367,16 @@ def main():
     handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
     print(json.dumps(handoff, indent=2), file=sys.stderr)
 
+    # Backstop the PR-body sync from live head state — the agent was told
+    # to run it after each push, but the final body must not depend on
+    # that. Cosmetic by design: the Run's verdict is CI alone, so a sync
+    # failure is logged, never fatal.
+    sync = run_to_log(
+        [sys.executable, str(here.parent / "sync_pr_body.py"), pr_url]
+    )
+    if sync.returncode != 0:
+        print("warning: PR body sync failed; body may be stale", file=sys.stderr)
+
     # Arm the reconcile watch BEFORE the green check: a run that opened an
     # upstream PR but got stuck must still leave the days-long wait armed.
     # The schema forces `upstream_pr`, so a missing key is a real breach
@@ -362,7 +387,7 @@ def main():
         run_to_log(
             [
                 "impwatch", "arm", "--clear", "--",
-                str(ws / "scripts" / "ggml-staging-automation" / "conditions" / "pr_merged.py"),
+                str(here.parent / "repoint-llama-bump" / "condition.py"),
                 handoff["upstream_pr"],
                 pr_url,
             ],

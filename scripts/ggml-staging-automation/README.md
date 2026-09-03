@@ -1,16 +1,21 @@
 # The ggml-staging-automation bump loop
 
-This directory holds this workspace's whole side of the imp bump loop:
-directory-per-imp under `imps/` (each imp's entry point is
-its `imp.py`, with its private resources beside it — the fix
-imp's `build.py` validation harness lives in its directory and is
-copied into each run workspace), and the paired Condition Scripts under
-`conditions/`. The imps are self-contained: they clone
-ROCm/ggml-staging-automation directly from GitHub and depend on no
-checkout under `sources/`. The imp design record is
-[docs/imp-design.md](../../docs/imp-design.md) and the tool architecture
-[tools/README.md](../../tools/README.md); this README is the authoritative
-record of each script's boundary.
+This directory holds this workspace's whole side of the imp bump loop.
+This README is the authoritative record of each script's boundary; the
+imp design record is [docs/imp-design.md](../../docs/imp-design.md) and
+the tool architecture is [tools/README.md](../../tools/README.md).
+
+The layout is directory-per-imp under `imps/`. Each imp's entry point is
+its `imp.py`, the Condition Script that launches it is the `condition.py`
+beside it, and its private resources sit alongside (the fix imp's
+`build.py` validation harness is copied into each run workspace).
+
+The shared `imps/sync_pr_body.py` rewrites the bump PR body's llama.cpp
+row from the live head, so the description stays truthful while the loop
+moves the pin. The hrx-system row is never touched.
+
+The imps are self-contained: they clone ROCm/ggml-staging-automation
+directly from GitHub and depend on no checkout under `sources/`.
 
 `../imps/fix-llama-bump.py` (hyphenated, under `scripts/pipelines/`)
 is the earlier hand-launched spike — an experiment to mine, not an
@@ -30,7 +35,7 @@ workspace root, with a gitignored config naming these imps:
 
 ```sh
 impd --config impd.json                # from the workspace root
-impwatch arm -- $PWD/scripts/ggml-staging-automation/conditions/red_bump_prs.py
+impwatch arm -- $PWD/scripts/ggml-staging-automation/imps/fix-llama-bump/condition.py
 impwatch tick                          # wire into cron for a live loop
 ```
 
@@ -42,7 +47,7 @@ state lives in this workspace's `.imp/`.
 ## `fix-llama-bump` (`imps/fix-llama-bump/imp.py`)
 
 Arguments: one — the bump PR URL. Launched by
-`conditions/red_bump_prs.py` under Run Id `fix-bump-pr-<N>` (`<N>` the PR
+its `condition.py` under Run Id `fix-bump-pr-<N>` (`<N>` the PR
 number).
 
 Observable behavior: it derives everything from its argument and live
@@ -74,7 +79,7 @@ llama.cpp and hrx-system hashes CI validated, the bump PR link, and the
 green Actions run link. The reconcile watch is armed with:
 
 ```sh
-impwatch arm --clear -- <ws>/scripts/ggml-staging-automation/conditions/pr_merged.py <upstream-pr-url> <bump-pr-url>
+impwatch arm --clear -- <ws>/scripts/ggml-staging-automation/imps/repoint-llama-bump/condition.py <upstream-pr-url> <bump-pr-url>
 ```
 
 It exits `0` iff the bump PR is green — verified mechanically by the
@@ -94,11 +99,14 @@ Details the implementation settled:
   opened an upstream PR still arms the days-long wait.
 - Fix commits carry a `Relevant hrx PR: <full URL>` trailer naming the
   breaking hrx-system PR.
+- The agent runs `sync_pr_body.py` after each push to the PR branch, and
+  the wrapper runs it once more after the handoff as the backstop; a sync
+  failure is logged, never the Run's verdict.
 
 ## `repoint-llama-bump` (`imps/repoint-llama-bump/imp.py`)
 
 Arguments: two — the merged upstream PR URL, then the original bump PR
-URL. Launched by `conditions/pr_merged.py` under Run Id
+URL. Launched by its `condition.py` under Run Id
 `fix-bump-pr-<N>-repoint`.
 
 Observable behavior: if the bump PR has been closed in the meantime — the
@@ -124,6 +132,8 @@ Details the implementation settled:
   PR's `mergeCommit` via
   `git update-index --cacheinfo 160000,<sha>,llama.cpp` — a submodule pin
   is an ordinary tree entry.
+- After the push, `sync_pr_body.py` rewrites the bump PR body's
+  llama.cpp row to the canonical pin.
 - Everything lands as one commit — headline
   `Repoint llama.cpp at merged upstream`, body naming the upstream PR it
   consumes in place of the fork — pushed to the PR's head branch.
@@ -138,20 +148,21 @@ Details the implementation settled:
   change-nothing rule; the diagnosis is printed to the Run log before the
   nonzero exit.
 
-## The Condition Scripts (`conditions/`)
+## The Condition Scripts (each imp's `condition.py`)
 
 Both fulfill impwatch's Condition Script contract: run with armed
 arguments, emit zero or more Launch Bodies on stdout (one JSON per line);
-stderr and exit code are diagnostics only.
+stderr and exit code are diagnostics only. Each lives beside the `imp.py`
+it launches.
 
-- **`red_bump_prs.py`** — the standing sensor; armed once as a
+- **`fix-llama-bump/condition.py`** — the standing sensor; armed once as a
   non-clearing Watch Row, no arguments. Each Tick it queries GitHub (`gh`)
   for open automation bump PRs with failing CI in
   ROCm/ggml-staging-automation and emits one launch per discovery:
   `{"imp": "fix-llama-bump", "id": "fix-bump-pr-46", "args": ["<pr-url>"]}`.
   The Run Id derives from the PR number alone — one automatic fix per bump
   PR, ever; a PR red again after its fix needs a human.
-- **`pr_merged.py`** — the reconcile sensor; armed by fix runs as a
+- **`repoint-llama-bump/condition.py`** — the reconcile sensor; armed by fix runs as a
   clearing Watch Row with the upstream PR URL then the bump PR URL. Emits
   nothing until the upstream PR reaches merged, then the single
   `repoint-llama-bump` launch (`fix-bump-pr-<N>-repoint`, N from the bump

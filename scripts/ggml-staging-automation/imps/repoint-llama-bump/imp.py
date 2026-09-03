@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Imp: repoint a bump PR from the validation fork to merged upstream.
 
-Launched by its paired sensor, ../../conditions/pr_merged.py, which
+Launched by its paired sensor, the condition.py beside this file, which
 the fix imp (../fix-llama-bump/imp.py) arms; the
 ggml-staging-automation README section `repoint-llama-bump` is the
 authoritative boundary. Argv carries the merged upstream PR URL then
@@ -23,17 +23,23 @@ branch), and pin llama.cpp at the upstream PR's merge commit via
 is an ordinary tree entry, so the index edit alone suffices and the
 submodule is never initialized. All of it lands as one commit — the
 llama.cpp change complete in itself, hrx-system untouched, per the
-never-alone rule — pushed to the PR's head branch.
+never-alone rule — pushed to the PR's head branch. The PR body is then
+synced from the pushed head by ``sync_pr_body.py`` (shared by both imps,
+one level above this file), so the description's llama.cpp row names the
+canonical pin again.
 
 Then CI decides: `gh pr checks --watch` runs until the checks settle, and
 its exit code is the verdict. Green is expected, because the identical
 change was already validated on this PR via the fork; that expectation is
-why there are no retry semantics. Checks take a beat to attach after a
-push, and until they do the PR still reports the previous head's checks —
-a watch started too early returns that stale green in seconds (it
-happened: PR 57's repoint run went green before its CI had begun). So the
-watch is gated: poll until the PR's head is the pushed commit and its
-rollup holds checks, within a bounded wait that fails the Run loudly.
+why there are no retry semantics.
+
+The watch is gated. Checks take a beat to attach after a push, and until
+they do the PR still reports the previous head's checks — a watch started
+too early returns that stale green in seconds (it happened: PR 57's
+repoint run went green before its CI had begun). So the imp polls until
+the PR's head is the pushed commit and its rollup holds checks, within a
+bounded wait that fails the Run loudly.
+
 Red means launching an agent whose only job is a diagnosis written to
 stderr — a guess at what went wrong and what a human should check, under
 an explicit change-NOTHING rule (no commits, no pushes, no fixes) — and
@@ -55,7 +61,7 @@ import time
 from pathlib import Path
 
 # Both patterns are the provenance gate: argv normally comes from
-# pr_merged.py's already-validated Launch Body, but humans launch by hand
+# condition.py's already-validated Launch Body, but humans launch by hand
 # too, so anything but the two real PR-URL shapes is refused before any
 # subprocess starts. The bump capture group is the PR number the slug
 # derives from. STAGING_PR_URL is duplicated from the fix imp —
@@ -199,7 +205,7 @@ def main():
         )
     bump_pr_url = bump_match.group(0)
 
-    # slug == the Run Id convention pr_merged.py emits, so the /tmp
+    # slug == the Run Id convention condition.py emits, so the /tmp
     # workspace traces to its Run without this process ever being told its
     # Run Id.
     slug = f"fix-bump-pr-{bump_match.group(1)}-repoint"
@@ -304,6 +310,18 @@ def main():
     # decides the Run. The watch only means something once the checks
     # belong to the commit just pushed; the gate is the header's story.
     wait_for_checks_to_attach(bump_pr_url, pushed_sha)
+
+    # Truthful description: rewrite the body's llama.cpp row from the
+    # pushed head — by sha, since the PR's reported head can lag the
+    # push. Cosmetic by design — logged on failure, never fatal; the
+    # verdict below is CI alone.
+    imps_dir = Path(__file__).resolve().parents[1]
+    sync = run_to_log(
+        [sys.executable, str(imps_dir / "sync_pr_body.py"), bump_pr_url,
+         "--head", pushed_sha]
+    )
+    if sync.returncode != 0:
+        print("warning: PR body sync failed; body may be stale", file=sys.stderr)
     checks = run_to_log(
         ["gh", "pr", "checks", bump_pr_url, "--watch", "--interval", "60"]
     )

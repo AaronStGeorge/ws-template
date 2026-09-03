@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Condition script: when an upstream PR merges, emit the repoint launch.
 
-Paired with ../imps/repoint-llama-bump/imp.py — this script exists only to
-launch it; the imps README is the authoritative record of the pair.
+Paired with the imp.py beside it — this script exists only to launch it;
+the imps README is the authoritative record of the pair.
 
 The reconcile sensor of the bump loop: argv carries the upstream PR URL to
 watch, then the original bump PR URL. Emits nothing until `gh` reports the
@@ -37,7 +37,7 @@ def main():
     # network call, and a mis-arm crashes visibly on every Tick.
     exactly_two_arguments = len(sys.argv) == 3
     if not exactly_two_arguments:
-        raise SystemExit("usage: pr_merged.py <upstream-pr-url> <bump-pr-url>")
+        raise SystemExit("usage: condition.py <upstream-pr-url> <bump-pr-url>")
     upstream_pr_url = sys.argv[1]
     bump_match = STAGING_PR_URL.fullmatch(sys.argv[2])
     if bump_match is None:

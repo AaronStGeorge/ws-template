@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Condition script: discover red bump PRs, emit fix-llama-bump launches.
 
-Paired with ../imps/fix-llama-bump/imp.py — this script exists only to
-launch it; the imps README is the authoritative record of the pair.
+Paired with the imp.py beside it — this script exists only to launch it;
+the imps README is the authoritative record of the pair.
 
 The standing sensor of the bump loop: no arguments; each Tick it queries
 GitHub via `gh` for open automation bump PRs with failing CI in
@@ -35,7 +35,7 @@ def main():
     # surfacing in the watch log rather than silently ignoring.
     armed_with_arguments = len(sys.argv) > 1
     if armed_with_arguments:
-        raise SystemExit("usage: red_bump_prs.py (takes no arguments)")
+        raise SystemExit("usage: condition.py (takes no arguments)")
 
     # stdout=PIPE only, never capture_output — a Launch Body must never
     # carry gh's stdout by accident, but gh's stderr flows through to the
