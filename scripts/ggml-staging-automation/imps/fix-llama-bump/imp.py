@@ -71,6 +71,10 @@ Prep performed before codex starts, and why (spike-proven):
   the fork-only rule mechanical for the default ``git push origin`` path —
   prose alone proved unreliable. This guards the accident, not a
   determined agent; proportionate for this experiment.
+- hrx-system's origin *push* URL is overridden to a non-URL, for the same
+  reason: the imp never changes hrx-system (only its pin moves, inside
+  the staircase), and a break that needs an hrx-system change ends the
+  Run with the problem in the handoff instead of a workaround.
 - ``sync_pr_body.py`` copy (shared by both imps, one level up): the bump
   PR's body names a llama.cpp pin the staircase moves; the agent runs
   this after every push to the PR branch
@@ -99,6 +103,11 @@ STAGING_PR_URL = re.compile(
 )
 
 FORK_PUSH_URL = "git@github.com:AaronStGeorge/llama.cpp.git"
+
+# Not a URL at all: git fails to resolve it, so any `git push` from the
+# hrx-system checkout dies before reaching a remote. The name is the
+# error message the agent reads when it tries.
+HRX_PUSH_URL = "hrx-system-is-never-pushed"
 
 # Cloned directly — the imp is self-contained and depends on no local
 # checkout of the staging repo.
@@ -186,6 +195,16 @@ Working rules:
   untouched. Push one step at a time and wait for its CI to go green
   before building the next. The finished PR is the automation's bump
   commit followed by green heads only.
+- hrx-system is never changed: no edits to its tree, no commits, no
+  pushes to ROCm/hrx-system. Only its submodule pin moves, and only as
+  the staircase rule above describes. The bump exists to bring llama.cpp
+  up to hrx-system, never the reverse.
+- If CI cannot go green without an hrx-system change, stop and hand off.
+  The handoff narrative names the problem: what breaks, the hrx-system
+  commit or PR that introduced it, the change hrx-system would need, and
+  why llama.cpp alone cannot absorb it. Do not push a workaround that
+  hides the break. The Run fails on the red PR, and that failure is the
+  human's summons.
 - When llama.cpp fixes were needed, finish by opening a PR to upstream
   llama.cpp: head = the last `{slug}-N` branch on the AaronStGeorge fork
   (it carries every fix commit), base = AMD-Ecosystem/llama.cpp
@@ -339,6 +358,14 @@ def main():
     run_to_log(
         ["git", "remote", "set-url", "--push", "origin", FORK_PUSH_URL],
         cwd=llama,
+        check=True,
+    )
+
+    # hrx-system is read-only for this imp; make that mechanical the same
+    # way the fork-only rule is, so a push there fails instead of landing.
+    run_to_log(
+        ["git", "remote", "set-url", "--push", "origin", HRX_PUSH_URL],
+        cwd=clone / "hrx-system",
         check=True,
     )
 

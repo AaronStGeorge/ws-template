@@ -73,6 +73,10 @@ hrx-system pin is never committed alone — it belongs to the automation's
 bump — and the common single-missing-fix case degenerates to exactly one
 llama.cpp bump commit with hrx untouched.
 
+hrx-system itself is never edited, committed to, or pushed; only its pin
+moves. A break that cannot be fixed in llama.cpp alone ends the Run with
+the problem described in the handoff and a red PR, which fails the Run.
+
 If and only if the repair requires a llama.cpp change upstream still
 lacks, it: pushes that change to the personal fork, retargets the bump
 PR's `.gitmodules` at the fork so the fix is validated in the PR's own CI,
@@ -109,6 +113,10 @@ Details the implementation settled:
   opened an upstream PR still arms the days-long wait.
 - Fix commits carry a `Relevant hrx PR: <full URL>` trailer naming the
   breaking hrx-system PR.
+- The never-change-hrx rule is mechanical as well as prose: the run
+  workspace's hrx-system checkout gets a push URL that is not a URL, so a
+  push there fails before reaching GitHub, mirroring the fork-only push
+  URL on llama.cpp.
 - The agent runs `sync_pr_body.py` after each push to the PR branch, and
   the wrapper runs it once more after the handoff as the backstop; a sync
   failure is logged, never the Run's verdict.
