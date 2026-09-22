@@ -12,4 +12,3 @@ build/
 # imp tool state and build
 build/
 .imp/
-impd.json

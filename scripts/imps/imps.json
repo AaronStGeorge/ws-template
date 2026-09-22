@@ -1,0 +1,22 @@
+{
+  "loops": {
+    "ggml-bump": {
+      "imps": {
+        "fix-llama-bump": "scripts/imps/ggml-staging-automation/fix-llama-bump/imp.py",
+        "repoint-llama-bump": "scripts/imps/ggml-staging-automation/repoint-llama-bump/imp.py",
+        "overseer": "scripts/imps/ggml-staging-automation/overseer/imp.py"
+      },
+      "watches": [
+        ["scripts/imps/ggml-staging-automation/fix-llama-bump/condition.py"],
+        ["scripts/imps/ggml-staging-automation/overseer/condition.py",
+         "--at", "09:00,14:00",
+         "--tz", "America/Boise",
+         "--model", "gpt-6-astra",
+         "--effort", "medium"]
+      ]
+    }
+  },
+  "workspaces": {
+    "lemonade-ws": ["ggml-bump"]
+  }
+}

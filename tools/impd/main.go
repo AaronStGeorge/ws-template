@@ -2,8 +2,8 @@
 //
 // One Daemon per workspace: impd runs from the workspace root, reads its
 // imp map from an explicit --config file (name -> executable path;
-// relative paths resolve from the workspace root, and the file is
-// gitignored — see impd.json.example), and owns everything under the
+// relative paths resolve from the workspace root; in this workspace
+// scripts/imps/loops.py generates it), and owns everything under the
 // workspace's .imp/ — socket, lock, and per-Run logs. Per Run it does
 // exactly three things (see tools/README.md for the full boundary): exec
 // the configured Imp with the Launch Body's arguments, stream its
