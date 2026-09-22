@@ -10,9 +10,10 @@ README is the architecture of the three tools and how they work together.
 ## The three tools
 
 - **`impd`** — the Daemon. Started from the workspace root with an explicit
-  config (`impd --config impd.json`; the file maps Imp names to
-  executable paths, is gitignored, and `impd.json.example` shows the
-  shape). It owns everything under the workspace's `.imp/`: its unix socket
+  config (`impd --config <path>`; a JSON `{"imps": {name: path}}` map —
+  in this workspace `scripts/imps/loops.py` generates it from
+  `scripts/imps/imps.json` and passes it down a pipe). It owns
+  everything under the workspace's `.imp/`: its unix socket
   (`daemon.sock`, the only listener — no network port; directory perms are
   the same-user boundary), a single-instance lock, and per-Run logs
   (`runs/<run-id>.log`). Per Run it does exactly three things: exec the
@@ -49,8 +50,9 @@ A loop is composed from these parts alone: a standing (non-clearing) row
 discovers work and launches a Imp; the Imp does the work and may
 arm a clearing row pairing a condition with a follow-on launch; days later
 a tick fires it with no process having waited in between. The first real
-loop lives in this workspace under `scripts/ggml-staging-automation/`
-(see its README).
+loop lives in this workspace under `scripts/imps/ggml-staging-automation/`
+(see its README); `scripts/imps/README.md` covers how loops are
+declared and started.
 
 ## Build and check
 
@@ -63,8 +65,7 @@ ctest --test-dir build --output-on-failure   # the end-to-end chain check
 ## Running a workspace's daemon
 
 ```sh
-cp impd.json.example impd.json   # then edit; impd.json is gitignored
-./build/bin/impd --config impd.json
+./build/bin/impd --config <imps.json>   # {"imps": {name: path}}
 ./build/bin/impwatch arm -- <workspace>/scripts/.../some_sensor.py
 ./build/bin/impwatch tick        # wire into cron for a live loop
 ./build/bin/impctl runs

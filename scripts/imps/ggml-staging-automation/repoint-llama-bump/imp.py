@@ -43,7 +43,7 @@ bounded wait that fails the Run loudly.
 Red means launching an agent whose only job is a diagnosis written to
 stderr — a guess at what went wrong and what a human should check, under
 an explicit change-NOTHING rule (no commits, no pushes, no fixes) — and
-exiting nonzero so the failed Run summons the human.
+exiting nonzero so the failed Run is flagged as needing attention.
 
 impd gotchas: Imp stdout is discarded and stderr is captured as the
 Run's log, so codex's stdout is redirected onto stderr and every wrapper
@@ -97,9 +97,9 @@ DIAGNOSIS_SCHEMA = {
 }
 
 # Diagnosis only — the change-NOTHING rule is the load-bearing line: the
-# repointed commit is already pushed, and a failed Run summoning the human
+# repointed commit is already pushed, and a failed Run needing attention
 # is the designed outcome, so any agent-made fix here would paper over a
-# state the human is meant to see.
+# state someone is meant to see.
 DIAGNOSIS_INSTRUCTIONS = """\
 The mechanical repoint of the llama.cpp submodule to the merged upstream
 PR {upstream_pr_url} went red on the bump PR {bump_pr_url}.
@@ -141,7 +141,7 @@ def wait_for_checks_to_attach(bump_pr_url, pushed_sha):
     head with an empty rollup, and a watch started then returns the old
     verdict almost immediately. Both facts must hold before the watch means
     anything. Past the bounded wait, exit nonzero: a Run that cannot tell
-    what CI thinks must summon the human, never guess green.
+    what CI thinks must fail as needing attention, never guess green.
     """
     deadline = time.monotonic() + CHECKS_ATTACH_TIMEOUT_SECONDS
     while True:
@@ -331,7 +331,7 @@ def main():
 
     # Red: the diagnosis agent. Its handoff is schema-forced to the one
     # string the human needs, printed into the Run log; the Run then fails
-    # on purpose — a failed Run is what summons the human, and there are
+    # on purpose — a failed Run is what flags it for attention, and there are
     # no retry semantics anywhere in this imp.
     schema_path = wsdir / ".handoff-schema.json"
     schema_path.write_text(

@@ -55,8 +55,8 @@ Prep performed before codex starts, and why (spike-proven):
 - Precondition: ``codex login status`` must pass. codex can go weeks
   between uses here and its ChatGPT login can lapse in between; failing
   before any clone makes the Run's log say exactly that, instead of a
-  codex startup error buried after the prep. A failed Run is the human's
-  summons — ``codex login``, then relaunch under a fresh Run Id.
+  codex startup error buried after the prep. A failed Run needs attention
+  — here ``codex login``, then relaunch under a fresh Run Id.
 - The staging work branch is the PR's ``headRefName`` via ``gh`` — a
   property of the PR, never imp config.
 - Only ggml-staging-automation is cloned — directly from GitHub — and the
@@ -203,8 +203,8 @@ Working rules:
   The handoff narrative names the problem: what breaks, the hrx-system
   commit or PR that introduced it, the change hrx-system would need, and
   why llama.cpp alone cannot absorb it. Do not push a workaround that
-  hides the break. The Run fails on the red PR, and that failure is the
-  human's summons.
+  hides the break. The Run fails on the red PR, and that failure marks
+  the Run as needing attention.
 - When llama.cpp fixes were needed, finish by opening a PR to upstream
   llama.cpp: head = the last `{slug}-N` branch on the AaronStGeorge fork
   (it carries every fix commit), base = AMD-Ecosystem/llama.cpp
@@ -329,7 +329,7 @@ def main():
     ).stdout.strip()
 
     # The workspace root comes from this file's own location
-    # (scripts/ggml-staging-automation/imps/fix-llama-bump/imp.py),
+    # (scripts/imps/ggml-staging-automation/fix-llama-bump/imp.py),
     # used only for the agent-config and .venv symlinks below.
     ws = Path(__file__).resolve().parents[4]
     here = Path(__file__).resolve().parent

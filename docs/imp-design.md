@@ -98,7 +98,8 @@ POSTing what it emits.
   design with a user-global `~/.ws2`; see the archived repo for why it
   existed and why it lost.)
 - Exec-with-arguments is the entire Imp contract; stderr streams to a
-  per-Run log file; stdout is ignored; exit code is the outcome. No
+  per-Run log file; stdout is ignored; exit code is the outcome, and a
+  nonzero exit means only that the Run needs attention. No
   messages, no structured-result channel — richer artifacts live in the
   domain (PR bodies), where the human already looks.
 - Run observation is poll-only; the Daemon never pushes.

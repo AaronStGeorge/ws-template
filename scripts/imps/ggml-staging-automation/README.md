@@ -2,55 +2,36 @@
 
 This directory holds this workspace's whole side of the imp bump loop.
 This README is the authoritative record of each script's boundary; the
-imp design record is [docs/imp-design.md](../../docs/imp-design.md) and
-the tool architecture is [tools/README.md](../../tools/README.md).
+imp design record is [docs/imp-design.md](../../../docs/imp-design.md) and
+the tool architecture is [tools/README.md](../../../tools/README.md).
 
-The layout is directory-per-imp under `imps/`. Each imp's entry point is
+The layout is directory-per-imp. Each imp's entry point is
 its `imp.py`, the Condition Script that launches it is the `condition.py`
 beside it, and its private resources sit alongside (the fix imp's
 `build.py` validation harness is copied into each run workspace).
 
-The shared `imps/sync_pr_body.py` rewrites the bump PR body's llama.cpp
+The shared `sync_pr_body.py` rewrites the bump PR body's llama.cpp
 row from the live head, so the description stays truthful while the loop
 moves the pin. The hrx-system row is never touched.
 
 The imps are self-contained: they clone ROCm/ggml-staging-automation
 directly from GitHub and depend on no checkout under `sources/`.
 
-`../imps/fix-llama-bump.py` (hyphenated, under `scripts/pipelines/`)
-is the earlier hand-launched spike — an experiment to mine, not an
-authority.
-
-This workspace runs its own imp Daemon (one per workspace) from the
-workspace root, with a gitignored config naming these imps:
-
-```json
-{
-  "imps": {
-    "fix-llama-bump": "scripts/ggml-staging-automation/imps/fix-llama-bump/imp.py",
-    "repoint-llama-bump": "scripts/ggml-staging-automation/imps/repoint-llama-bump/imp.py"
-  }
-}
-```
-
-```sh
-impd --config impd.json                # from the workspace root
-impwatch arm -- $PWD/scripts/ggml-staging-automation/imps/fix-llama-bump/condition.py
-impwatch tick                          # one tick by hand
-setsid nohup scripts/ggml-staging-automation/tick-loop.sh \
-    > .imp/tick-loop.log 2>&1 < /dev/null &   # the live loop: a tick every 5 min
-```
-
-`tick-loop.sh` is the cron substitute (the devcontainer has no crond):
-it ticks every five minutes from the workspace root and nothing else.
+This loop is declared as `ggml-bump` in [../imps.json](../imps.json)
+and brought up by [../loops.py](../loops.py) (`loops.py up --workspace
+<name>`), which starts the Daemon, arms the standing sensor and the
+loop's overseer, and runs the ticker; see [../README.md](../README.md).
+`overseer/` is the loop's overseer imp; its brief is inlined there.
+Its slots (09:00 and 14:00 America/Boise) sit after the daily bump
+workflow (11:00 UTC) and its CI and fix Run have had a few hours.
 
 Setup is the workspace `.envrc`: on every directory entry it builds the
-imp tools into `build/bin` (see [tools/README.md](../../tools/README.md))
+imp tools into `build/bin` (see [tools/README.md](../../../tools/README.md))
 and puts them on PATH — `impwatch` must resolve bare, since the fix imp
 invokes it that way to arm its reconcile watch. All imp state lives in
 this workspace's `.imp/`.
 
-## `fix-llama-bump` (`imps/fix-llama-bump/imp.py`)
+## `fix-llama-bump` (`fix-llama-bump/imp.py`)
 
 Arguments: one — the bump PR URL. Launched by
 its `condition.py` under Run Id `fix-bump-pr-<N>` (`<N>` the PR
@@ -89,7 +70,7 @@ llama.cpp and hrx-system hashes CI validated, the bump PR link, and the
 green Actions run link. The reconcile watch is armed with:
 
 ```sh
-impwatch arm --clear -- <ws>/scripts/ggml-staging-automation/imps/repoint-llama-bump/condition.py <upstream-pr-url> <bump-pr-url>
+impwatch arm --clear -- <ws>/scripts/imps/ggml-staging-automation/repoint-llama-bump/condition.py <upstream-pr-url> <bump-pr-url>
 ```
 
 It exits `0` iff the bump PR is green — verified mechanically by the
@@ -121,7 +102,7 @@ Details the implementation settled:
   the wrapper runs it once more after the handoff as the backstop; a sync
   failure is logged, never the Run's verdict.
 
-## `repoint-llama-bump` (`imps/repoint-llama-bump/imp.py`)
+## `repoint-llama-bump` (`repoint-llama-bump/imp.py`)
 
 Arguments: two — the merged upstream PR URL, then the original bump PR
 URL. Launched by its `condition.py` under Run Id
@@ -135,8 +116,8 @@ no agent — updating the bump PR to consume the merged upstream in place of
 the fork, then watches the PR's CI. Green is the expected case (the same
 change was already validated on this PR via the fork) and the Run exits
 `0`. Red launches an agent whose whole job is diagnosis: its guess goes to
-stderr for the Run's log, and the Run exits nonzero — a failed Run is what
-summons the human. No retry semantics.
+stderr for the Run's log, and the Run exits nonzero — a failed Run means
+the Run needs attention. No retry semantics.
 
 Details the implementation settled:
 
