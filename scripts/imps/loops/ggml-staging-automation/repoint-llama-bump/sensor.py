@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Condition script: when an upstream PR merges, emit the repoint launch.
+"""Sensor: when an upstream PR merges, emit the repoint launch.
 
-Paired with the imp.py beside it — this script exists only to launch it;
+Paired with the imp.py beside it — this Sensor exists only to launch it;
 the imps README is the authoritative record of the pair.
 
-The reconcile sensor of the bump loop: argv carries the upstream PR URL to
+The reconcile Sensor of the bump loop: argv carries the upstream PR URL to
 watch, then the original bump PR URL. Emits nothing until `gh` reports the
-upstream PR merged, then emits the single repoint-llama-bump Launch Body
+upstream PR merged, then emits the single repoint-llama-bump Launch
 (Run Id `fix-bump-pr-<N>-repoint`, N from the bump PR). Armed by
-fix-llama-bump runs as a clearing Watch Row, so it normally fires exactly
-once. Stderr and exit code are diagnostics only.
+fix-llama-bump runs as a one-shot Watch (`impctl watch --once`), so it
+normally fires exactly once. Stderr and exit code are diagnostics only.
 
 Any upstream PR state other than MERGED — including CLOSED — is "not
-yet": a closed-unmerged upstream PR keeps the Watch Row pending forever,
-which is the wanted behavior, since the human sees it in the pending list
-and judges. Stdout is sacred: the one Launch Body only — everything
+yet": a closed-unmerged upstream PR keeps the one-shot Watch pending
+forever, which is the wanted behavior, since the human sees it in
+`impctl watches` and judges. Stdout is sacred: the one Launch only — everything
 narrative goes to stderr.
 """
 
@@ -32,12 +32,12 @@ STAGING_PR_URL = re.compile(
 
 def main():
     # argv is the provenance boundary: normally armed by the fix imp
-    # from already-validated values, but arming is a command line a human
-    # can also drive — so both arguments are checked here, before any
+    # from already-validated values, but `impctl watch` is a command line
+    # a human can also drive — so both arguments are checked here, before any
     # network call, and a mis-arm crashes visibly on every Tick.
     exactly_two_arguments = len(sys.argv) == 3
     if not exactly_two_arguments:
-        raise SystemExit("usage: condition.py <upstream-pr-url> <bump-pr-url>")
+        raise SystemExit("usage: sensor.py <upstream-pr-url> <bump-pr-url>")
     upstream_pr_url = sys.argv[1]
     bump_match = STAGING_PR_URL.fullmatch(sys.argv[2])
     if bump_match is None:
@@ -66,7 +66,7 @@ def main():
         return
 
     launch_body = {
-        "imp": "repoint-llama-bump",
+        "sigil": "repoint-llama-bump",
         "id": f"fix-bump-pr-{bump_match.group(1)}-repoint",
         "args": [upstream_pr_url, bump_pr_url],
     }

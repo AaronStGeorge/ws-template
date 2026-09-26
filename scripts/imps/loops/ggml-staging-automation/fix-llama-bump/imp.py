@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Imp: drive a failing ggml-staging-automation bump PR to green CI.
 
-Launched by its paired sensor, the condition.py beside this file; the
-ggml-staging-automation README (../../README.md) section `fix-llama-bump`
+Launched by its paired Sensor, the sensor.py beside this file; the
+ggml-staging-automation README (../README.md) section `fix-llama-bump`
 is the authoritative boundary. Argv carries the bump PR URL — the whole
 input; everything else is derived from live GitHub state (no ticket, no
 standing context document). Exit 0 means the bump PR is green; diagnostics
@@ -29,7 +29,7 @@ the outcome is the exit code and the narrative is stderr.
 
 Names: the slug that titles the /tmp workspace and prefixes the numbered
 llama.cpp fork branches is ``fix-bump-pr-<N>`` — deliberately identical
-to the Run Id convention condition.py emits, so fork branches
+to the Run Id convention sensor.py emits, so fork branches
 (``fix-bump-pr-46-1``, …) trace to their Run without this process ever
 being told its Run Id.
 
@@ -37,11 +37,11 @@ impd gotchas: Imp stdout is discarded and stderr is captured as the
 Run's log, so codex's stdout is redirected onto stderr and every wrapper
 print goes there too — nothing meaningful may touch stdout. The Daemon is
 per-workspace and runs from the workspace root, so this process inherits
-that cwd — which is exactly what ``impwatch arm`` needs (it finds its rows
-file through cwd); the workspace root is still derived from this file's
-own location for the symlink prep, never assumed. ``impwatch`` is invoked
-bare and expected on PATH (one-time setup; see the README) to arm the
-reconcile watch.
+that cwd — which is exactly what ``impctl watch`` needs (it finds the
+Daemon's socket through cwd); the workspace root is still derived from
+this file's own location for the symlink prep, never assumed. ``impctl``
+is invoked bare and expected on PATH (the workspace ``.envrc`` puts
+``build/bin`` there) to arm the reconcile watch as a one-shot Watch.
 
 After the agent exits, the wrapper — not the agent — decides the Run: it
 arms the reconcile watch iff the schema-forced handoff names an upstream
@@ -279,7 +279,7 @@ def run_to_log(argv, **kwargs):
 
 
 def main():
-    # argv is the provenance boundary: the Daemon relays the Launch Body's
+    # argv is the provenance boundary: the Daemon relays the Launch's
     # arguments verbatim, and humans launch by hand too — so the one
     # argument is pattern-checked here and trusted everywhere downstream.
     parser = argparse.ArgumentParser()
@@ -312,7 +312,7 @@ def main():
             "not on PATH); run `codex login` and relaunch"
         )
 
-    # slug == the Run Id convention condition.py emits — the trick that
+    # slug == the Run Id convention sensor.py emits — the trick that
     # lets fork branches (`{slug}-1`, …) trace to their Run without this
     # process ever being told its Run Id.
     slug = f"fix-bump-pr-{url_match.group(1)}"
@@ -329,9 +329,9 @@ def main():
     ).stdout.strip()
 
     # The workspace root comes from this file's own location
-    # (scripts/imps/ggml-staging-automation/fix-llama-bump/imp.py),
+    # (scripts/imps/loops/ggml-staging-automation/fix-llama-bump/imp.py),
     # used only for the agent-config and .venv symlinks below.
-    ws = Path(__file__).resolve().parents[4]
+    ws = Path(__file__).resolve().parents[5]
     here = Path(__file__).resolve().parent
     wsdir = Path(tempfile.mkdtemp(prefix=f"{slug}-"))
 
@@ -429,14 +429,15 @@ def main():
     # Arm the reconcile watch BEFORE the green check: a run that opened an
     # upstream PR but got stuck must still leave the days-long wait armed.
     # The schema forces `upstream_pr`, so a missing key is a real breach
-    # and crashes visibly. `impwatch` comes bare from PATH; the condition
-    # script is absolute because nothing shares a cwd with anything.
+    # and crashes visibly. `impctl` comes bare from PATH and finds the
+    # Daemon through the inherited cwd; the Sensor is absolute
+    # because nothing shares a cwd with anything.
     opened_upstream_pr = handoff["upstream_pr"] is not None
     if opened_upstream_pr:
         run_to_log(
             [
-                "impwatch", "arm", "--clear", "--",
-                str(here.parent / "repoint-llama-bump" / "condition.py"),
+                "impctl", "watch", "--once", "--",
+                str(here.parent / "repoint-llama-bump" / "sensor.py"),
                 handoff["upstream_pr"],
                 pr_url,
             ],

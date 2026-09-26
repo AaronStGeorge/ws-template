@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Condition script: emit one ggml-bump overseer launch per daily slot.
+"""Sensor: emit one ggml-bump overseer launch per daily slot.
 
-Paired with the imp.py beside it; `scripts/imps/README.md` is the record
-of the pair. Armed as a standing row by `loops.py up` with the schedule
-and the check's codex knobs:
+Paired with the imp.py beside it; the loop's README (`../README.md`) is
+the record of the pair. Declared as a standing Watch in the loop's `imps.json` with
+the schedule and the check's codex knobs:
 
-    condition.py --at HH:MM[,HH:MM...] --tz ZONE --model M --effort E
+    sensor.py --at HH:MM[,HH:MM...] --tz ZONE --model M --effort E
 
-`--at`/`--tz` are the sensor's; `--model`/`--effort` pass through to the
+`--at`/`--tz` are the Sensor's; `--model`/`--effort` pass through to the
 imp as the Run's args, plus `--run-id` so the imp can name the thread it
 opens after its own Run.
 
 Each Tick, for every slot already past in the zone's local today, it
-emits `{"imp": "overseer", "id": "oversee-ggml-bump-<YYYY-MM-DD>-<HHMM>", ...}`.
+emits `{"sigil": "overseer", "id": "oversee-ggml-bump-<YYYY-MM-DD>-<HHMM>", ...}`.
 The `HHMM` is the slot's configured time from `--at`, never the Tick's
 time: every Tick after 09:00 emits the same `...-0900` id, so a past
 slot re-emitted on every later Tick that day is a rejected duplicate
@@ -23,7 +23,7 @@ firing window: a slot missed while the container was down runs late,
 and a Daemon restart mid-day (which forgets its Run Ids) re-runs the
 slot — both accepted over the complexity of guarding them.
 
-Stdout is sacred: Launch Bodies only, one JSON per line.
+Stdout is sacred: Launches only, one JSON per line.
 """
 
 import argparse
@@ -61,7 +61,7 @@ def main():
             continue
         run_id = f"oversee-{LOOP}-{now:%Y-%m-%d}-{slot:%H%M}"
         launch_body = {
-            "imp": "overseer",
+            "sigil": "overseer",
             "id": run_id,
             "args": [
                 "--model", args.model,

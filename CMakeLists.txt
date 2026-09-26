@@ -1,5 +1,5 @@
 # Contributor-facing build and test orchestrator for the imp tools: builds
-# build/bin/{impd,impctl,impwatch} from tools/ and registers the end-to-end
+# build/bin/{impd,impctl} from tools/ and registers the end-to-end
 # chain check. The Go targets always run — go's own incrementality makes
 # re-running cheap, so no source-globbing games.
 cmake_minimum_required(VERSION 3.28)
@@ -18,10 +18,6 @@ add_custom_target(impctl ALL
   COMMAND ${GO_EXECUTABLE} build -o ${IMP_BIN_DIR}/impctl ./tools/impctl
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   VERBATIM)
-add_custom_target(impwatch ALL
-  COMMAND ${GO_EXECUTABLE} build -o ${IMP_BIN_DIR}/impwatch ./tools/impwatch
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  VERBATIM)
 
 enable_testing()
 add_test(NAME e2e_chain
@@ -30,5 +26,5 @@ add_test(NAME e2e_chain
 
 add_custom_target(check
   COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} --output-on-failure
-  DEPENDS impd impctl impwatch
+  DEPENDS impd impctl
   VERBATIM)

@@ -1,77 +1,128 @@
 # Imp loops
 
-Everything imp in this workspace lives here: the loops themselves (one
-directory each, e.g. [ggml-staging-automation/](ggml-staging-automation/),
-each may have its own overseer), the one checked-in config
-[imps.json](imps.json), and [loops.py](loops.py), which brings a
-workspace's loops up and down. The runtime (`impd`, `impwatch`,
-`impctl`) is documented in [tools/README.md](../../tools/README.md) and
-its design record in [docs/imp-design.md](../../docs/imp-design.md).
+Everything imp in this workspace lives here. A Loop is one directory under
+[loops/](loops/) holding the Imps, Sensors, and Manifest that
+form one automation; the runtime that runs them is
+[tools/README.md](../../tools/README.md) and the Language and contracts
+they honor are [docs/imp-design.md](../../docs/imp-design.md). This README
+is how loops are laid out, brought up, and written.
 
-## Running
+## Running this workspace's loops
 
 ```sh
-scripts/imps/loops.py up --workspace lemonade-ws   # daemon, watches, ticker
-scripts/imps/loops.py status                       # processes, runs, watches, log tail
-scripts/imps/loops.py down                         # ticker, then daemon; watches stay
+impctl up --manifest scripts/imps/loops/ggml-staging-automation/imps.json
+impctl status
+impctl down
 ```
 
-`up` is safe to rerun: each step is skipped when already done. `down`
-never removes Watch Rows, so a pending reconcile watch survives a
-restart. The container has no crond; the ticker is `loops.py tick`,
-started detached by `up`. Tools come from `build/bin` (the `.envrc`
-builds them); `gh`, `codex` and `claude` must be logged in.
+`up` is the whole answer to "what does this workspace run": start the
+Daemon if needed, wait for it, apply each named Manifest. Rerunning it is
+free, and a Sigil or Watch added by hand survives it. `down` stops the
+Daemon and with it every Watch, including a one-shot armed mid-Run;
+re-arming one is a human step. Each loop's README lists what its Imps
+need logged in or on `PATH`.
 
-## The config
+## How a loop is laid out
 
-`imps.json` has two sections, `loops` and `workspaces`.
+A loop is directory-per-imp: each Imp's entry point is its `imp.py`, the
+Sensor that launches it is the `sensor.py` beside it, and
+its private resources sit alongside. Scripts two Imps share sit one level
+up, in the loop directory, and each Imp resolves them relative to its own
+file; Imps never import across directories. Imps useful to several loops
+would live directly under `scripts/imps/`, beside `loops/`; none exist yet.
 
-`loops` declares each loop by name. A loop has two parts:
+The loop's `imps.json` is its Manifest, per the design record's shape. A
+loop's overseer, when it has one, is an ordinary pair of entries in it: an
+`overseer` Sigil and a standing Watch on that Imp's `sensor.py` with its
+schedule as arguments.
 
-- `imps`: imp name → workspace-relative path to its `imp.py`. This is
-  what the Daemon is configured with.
-- `watches`: the standing Watch Rows `up` arms once at startup, each as
-  an argv list (`condition.py` first, then its arguments). argv[0] is
-  workspace-relative in the file and made absolute when armed.
+Editing a standing Watch's argv in a Manifest and re-running `up` adds a
+second Watch beside the old one, because the Daemon matches on exact
+argv. Remove the old one with `impctl unwatch ID` (the id is in
+`impctl watches`), or take the Daemon through `down` and `up`.
 
-Only standing rows belong in `watches`. Clearing (one-shot) rows are
-armed by imps mid-Run with arguments that only exist then — the fix
-imp's reconcile watch names the upstream PR it just opened — so they
-have no place in a checked-in config.
+## Writing a loop: the echo example
 
-A loop's overseer is an ordinary pair of entries: its `overseer` imp,
-plus a watch row for that imp's `condition.py` carrying the daily slot
-times and zone and the codex model and effort for the check.
+[loops/echo/](loops/echo/) is the smallest complete loop and the one the
+chain check drives. Its Manifest binds one Sigil and declares one standing
+Watch:
 
-`workspaces` maps a workspace name to the loops it runs;
-`up --workspace <name>` selects one. The selected loops' `imps` are
-merged into one Daemon config, so two loops may share an imp name only
-at the same path.
+```json
+{
+  "sigils": {"echo": "scripts/imps/loops/echo/imp.py"},
+  "watches": [["scripts/imps/loops/echo/sensor.py"]]
+}
+```
 
-## The overseer
+`imp.py` writes its argv to stderr and exits 0: the whole Imp process
+contract in one line. `sensor.py` has no condition to test and prints
+the same Launch on every Tick, under the fixed Run Id `echo-standing`:
 
-Each loop may have an overseer imp: a check at fixed daily slots
-(`oversee-<loop>-<date>-<HHMM>` Runs) that decides whether a human is
-needed — a PR waiting on review or merge, a failed Run, a watch that
-will never fire. The judgment is the loop's brief, a prose
-constant in its `imp.py`; the mechanics are in that file's header. There is no generic overseer
-yet; what is generic will be clearer once there are more loops.
+```json
+{"sigil": "echo", "id": "echo-standing", "args": ["standing-token"]}
+```
 
-When a human is needed, the overseer opens a *thread*: a Claude Code
-session with Remote Control, named after the Run that opened it, which
-digs in, pushes one headline to the human's phone, and waits to be told
-what to do. There is at most one thread per loop.
+Bringing it up and ticking it by hand shows every piece working, and what
+"the design working" looks like on the second Tick:
 
-Later checks keep that thread current. The check reads the thread's
-transcript so far, and if the same issue still needs a human the thread
-is resumed with the new verdict and pushes a status line; if a different
-issue does, the old thread is archived and a new one opened; if nothing
-does, the thread is archived, silently.
+```
+$ impctl up --manifest scripts/imps/loops/echo/imps.json
+impd ready in 12ms (pid 41234)
+created echo -> scripts/imps/loops/echo/imp.py
+watch 1 standing (created): scripts/imps/loops/echo/sensor.py
+$ impctl tick
+{"watches":1,"launched":1,"duplicates":0,"dropped":0}
+$ impctl runs
+{"sigil":"echo","id":"echo-standing","path":"scripts/imps/loops/echo/imp.py","state":"succeeded","error":null}
+$ cat .imp/runs/echo-standing.log
+standing-token
+$ impctl tick
+{"watches":1,"launched":0,"duplicates":1,"dropped":0}
+$ impctl up --manifest scripts/imps/loops/echo/imps.json
+impd already running (pid 41234)
+unchanged echo -> scripts/imps/loops/echo/imp.py
+watch 1 standing (existing): scripts/imps/loops/echo/sensor.py
+```
 
-Archiving is `claude stop` + `claude rm`: the session leaves the active
-list but its transcript stays on disk and resumable by the id in the
-Run log. Deleting a thread yourself is fine too — it just means the
-next check has no context.
+A real loop differs from echo in three ways. Its Sensor has a
+condition: it queries the world (`gh`, the clock) and emits nothing when
+the answer is "not yet". Its Run Ids derive from the thing discovered
+(`fix-bump-pr-<N>` from a PR number, `oversee-<loop>-<date>-<HHMM>` from
+a slot's configured time, never the Tick's), so the same discovery is the
+same Id on every Tick and never tracked. And its Imp may arm a follow-on
+wait before it exits, which a Tick days later fires with no process having
+waited in between:
 
-If the Daemon or the ticker dies, the overseer dies with them and
-nothing reports it; `status` is the manual check for that.
+```sh
+impctl watch --once -- /abs/path/to/next/sensor.py <args that exist only now>
+```
+
+Rules the existing loops learned:
+
+- Stdout is the contract, in both directions. An Imp's stdout is
+  discarded, so redirect every child's stdout onto stderr or it vanishes
+  from the Run log. A Sensor's stdout must carry Launches
+  only, so capture children's stdout (`stdout=PIPE`, never
+  `capture_output`, so their stderr still reaches the watch log).
+- argv is the provenance boundary. The Daemon relays Launch arguments
+  verbatim and humans launch by hand too, so validate arguments at the top
+  of the executable and trust them everywhere below.
+- Name run workspaces and branches after the Run Id. An Imp is never told
+  its Run Id, but a slug derived the same way the Sensor derives
+  the Id traces everything the Run made back to it.
+- Arm one-shot Watches with an absolute path to the Sensor. Nothing
+  shares a cwd with anything except the Daemon.
+- Imps and Sensors are executables. Set the exec bit and let git track
+  the mode; `impctl apply`, `inscribe`, and `watch` all refuse a file that
+  is not executable, so the mistake surfaces where you typed the path
+  rather than as a failed Run or a watch-log line every Tick.
+
+## The loops
+
+- [loops/echo/](loops/echo/): the reference example above. It runs no
+  automation.
+- [loops/ggml-staging-automation/](loops/ggml-staging-automation/): the
+  bump loop the design record's story is about, with its overseer. An
+  *overseer* is an Imp whose job is to judge whether a human is needed
+  and, if so, get their attention; there is no generic one yet, and what
+  is generic will be clearer once there are more loops.

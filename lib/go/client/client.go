@@ -1,14 +1,23 @@
-// Package client is the single Go implementation of the Daemon's control
-// API — Launch, ListRuns, GetRun, ListImps over the workspace's
-// `.imp/daemon.sock`; impwatch and the impctl CLI both ride it so the two
-// cannot drift.
+// Package client is the transport for talking to the Daemon: it dials the
+// workspace's unix socket, sends one HTTP request per verb, and turns the
+// Daemon's statuses into Go errors. It defines no documents. The types that
+// cross the socket and the .imp/ paths live in lib/go/wire, which impd
+// imports as well, so both ends of the socket compile against one
+// definition of every type and cannot drift.
 //
-// Every imp process runs from its workspace root and finds that workspace's
-// Daemon through the current working directory — with one Daemon per
-// workspace, cwd IS the discovery mechanism, and there is no global home.
-// The Daemon's 409 surfaces distinctly as ErrDuplicateRun so a caller
-// relaying a re-fired condition can treat the duplicate as the benign,
-// expected outcome it is rather than an error.
+// impctl is this package's only importer. It is a package rather than a
+// file inside impctl so that a second Go program talking to the Daemon
+// would import it instead of copying it.
+//
+// A Client finds its Daemon through the current working directory: every
+// imp process runs from its workspace root, and with one Daemon per
+// workspace, cwd is the whole discovery mechanism. There is no global home.
+//
+// Two Daemon statuses are outcomes rather than failures and surface as
+// sentinel errors. 409 is ErrDuplicateRun: the benign result of re-firing a
+// condition under a deterministic Run Id. 404 is ErrNotFound: erasing or
+// unwatching what is already gone. Every other status outside the accepted
+// set becomes an error carrying the Daemon's own message.
 package client
 
 import (
@@ -17,50 +26,34 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
-	"path/filepath"
+	"strconv"
+	"strings"
+
+	"imp/lib/go/wire"
 )
 
-// LaunchBody is the document that launches a Run (Daemon POST /v1/runs).
-type LaunchBody struct {
-	Imp  string   `json:"imp"`
-	Id   string   `json:"id"`
-	Args []string `json:"args"`
-}
-
-// Run mirrors the Daemon's Run document.
-type Run struct {
-	Imp   string  `json:"imp"`
-	Id    string  `json:"id"`
-	State string  `json:"state"`
-	Error *string `json:"error"`
-}
-
-// Imp mirrors one entry of the Daemon's configured imp map,
-// as GET /v1/imps reports it.
-type Imp struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-}
-
 // ErrDuplicateRun reports the Daemon's 409: the Run Id is already occupied.
-// Callers arming idempotent conditions treat this as benign.
+// Callers relaying re-fired conditions treat this as benign.
 var ErrDuplicateRun = errors.New("run id already occupied")
+
+// ErrNotFound reports the Daemon's 404: no such Sigil, Watch, or Run.
+var ErrNotFound = errors.New("not found")
 
 // Client talks to the workspace's Daemon over its unix socket.
 type Client struct {
 	http *http.Client
 }
 
-// New returns a Client dialing .imp/daemon.sock relative to the current
-// working directory — the workspace root, where every imp command runs.
+// New returns a Client dialing wire.SocketPath relative to the current
+// working directory, the workspace root where every imp command runs.
 func New() *Client {
-	socketPath := filepath.Join(".imp", "daemon.sock")
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			var dialer net.Dialer
-			return dialer.DialContext(ctx, "unix", socketPath)
+			return dialer.DialContext(ctx, "unix", wire.SocketPath)
 		},
 	}
 	return &Client{http: &http.Client{Transport: transport}}
@@ -69,70 +62,124 @@ func New() *Client {
 // The host in these URLs is a placeholder; the transport always dials the socket.
 const baseURL = "http://impd/v1"
 
-// Launch POSTs a Launch Body and returns the initial Run document.
-func (c *Client) Launch(body LaunchBody) (Run, error) {
-	payload, err := json.Marshal(body)
-	if err != nil {
-		return Run{}, err
-	}
-	resp, err := c.http.Post(baseURL+"/runs", "application/json", bytes.NewReader(payload))
-	if err != nil {
-		return Run{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusConflict {
-		return Run{}, ErrDuplicateRun
-	}
-	if resp.StatusCode != http.StatusAccepted {
-		return Run{}, fmt.Errorf("launch: unexpected status %s", resp.Status)
-	}
-	var run Run
-	err = json.NewDecoder(resp.Body).Decode(&run)
+// ListSigils returns every Sigil, name-sorted by the Daemon.
+func (c *Client) ListSigils() ([]wire.Sigil, error) {
+	var sigils []wire.Sigil
+	_, err := c.do(http.MethodGet, "/sigils", nil, &sigils, http.StatusOK)
+	return sigils, err
+}
+
+// Inscribe binds name to path. The result's Outcome says whether the Sigil
+// was created, left unchanged, or moved from a previous path.
+func (c *Client) Inscribe(name, path string) (wire.InscribeResult, error) {
+	var result wire.InscribeResult
+	_, err := c.do(http.MethodPost, "/sigils", wire.Sigil{Name: name, Path: path}, &result, http.StatusCreated, http.StatusOK)
+	return result, err
+}
+
+// Erase removes a Sigil; ErrNotFound when there is none by that name.
+func (c *Client) Erase(name string) error {
+	_, err := c.do(http.MethodDelete, "/sigils/"+name, nil, nil, http.StatusNoContent)
+	return err
+}
+
+// ListWatches returns every Watch, id-sorted by the Daemon.
+func (c *Client) ListWatches() ([]wire.Watch, error) {
+	var watches []wire.Watch
+	_, err := c.do(http.MethodGet, "/watches", nil, &watches, http.StatusOK)
+	return watches, err
+}
+
+// Watch adds a Sensor argv. An argv already watched with the same
+// once flag comes back as the existing Watch with created false; that
+// idempotence is what makes re-applying a Manifest free.
+func (c *Client) Watch(argv []string, once bool) (wire.Watch, bool, error) {
+	var watch wire.Watch
+	status, err := c.do(http.MethodPost, "/watches", wire.Watch{Argv: argv, Once: once}, &watch, http.StatusCreated, http.StatusOK)
+	created := status == http.StatusCreated
+	return watch, created, err
+}
+
+// Unwatch removes a Watch by id; ErrNotFound when there is none.
+func (c *Client) Unwatch(id int) error {
+	_, err := c.do(http.MethodDelete, "/watches/"+strconv.Itoa(id), nil, nil, http.StatusNoContent)
+	return err
+}
+
+// Tick asks the Daemon for one pass over every Watch and returns once the
+// pass is done.
+func (c *Client) Tick() (wire.TickSummary, error) {
+	var summary wire.TickSummary
+	_, err := c.do(http.MethodPost, "/tick", nil, &summary, http.StatusOK)
+	return summary, err
+}
+
+// Launch POSTs a Launch and returns the Run as it stands on return.
+func (c *Client) Launch(body wire.Launch) (wire.Run, error) {
+	var run wire.Run
+	_, err := c.do(http.MethodPost, "/runs", body, &run, http.StatusAccepted)
 	return run, err
 }
 
 // ListRuns returns every Run the Daemon holds.
-func (c *Client) ListRuns() ([]Run, error) {
-	resp, err := c.http.Get(baseURL + "/runs")
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("list runs: unexpected status %s", resp.Status)
-	}
-	var runs []Run
-	err = json.NewDecoder(resp.Body).Decode(&runs)
+func (c *Client) ListRuns() ([]wire.Run, error) {
+	var runs []wire.Run
+	_, err := c.do(http.MethodGet, "/runs", nil, &runs, http.StatusOK)
 	return runs, err
 }
 
-// GetRun returns the Run under one Run Id.
-func (c *Client) GetRun(id string) (Run, error) {
-	resp, err := c.http.Get(baseURL + "/runs/" + id)
-	if err != nil {
-		return Run{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return Run{}, fmt.Errorf("get run: unexpected status %s", resp.Status)
-	}
-	var run Run
-	err = json.NewDecoder(resp.Body).Decode(&run)
+// GetRun returns the Run under one Run Id; ErrNotFound when there is none.
+func (c *Client) GetRun(id string) (wire.Run, error) {
+	var run wire.Run
+	_, err := c.do(http.MethodGet, "/runs/"+id, nil, &run, http.StatusOK)
 	return run, err
 }
 
-// ListImps returns the Daemon's configured imp map — a read-only
-// view of what its config file loaded.
-func (c *Client) ListImps() ([]Imp, error) {
-	resp, err := c.http.Get(baseURL + "/imps")
+// do is the one request path: encode in (when non-nil) as the JSON body,
+// decode the response into out (when non-nil), and return the status code
+// so callers that distinguish 201 from 200 can. A status outside accepted
+// is an error: the two sentinel statuses map to their sentinel errors, and
+// anything else carries the Daemon's own message, which is the diagnostic.
+func (c *Client) do(method, path string, in, out any, accepted ...int) (int, error) {
+	var payload io.Reader
+	if in != nil {
+		encoded, err := json.Marshal(in)
+		if err != nil {
+			return 0, err
+		}
+		payload = bytes.NewReader(encoded)
+	}
+	req, err := http.NewRequest(method, baseURL+path, payload)
 	if err != nil {
-		return nil, err
+		return 0, err
+	}
+	if in != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("list imps: unexpected status %s", resp.Status)
+
+	statusAccepted := false
+	for _, status := range accepted {
+		if resp.StatusCode == status {
+			statusAccepted = true
+		}
 	}
-	var regs []Imp
-	err = json.NewDecoder(resp.Body).Decode(&regs)
-	return regs, err
+	if !statusAccepted {
+		switch resp.StatusCode {
+		case http.StatusConflict:
+			return resp.StatusCode, ErrDuplicateRun
+		case http.StatusNotFound:
+			return resp.StatusCode, ErrNotFound
+		}
+		message, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, fmt.Errorf("%s %s: %s: %s", method, path, resp.Status, strings.TrimSpace(string(message)))
+	}
+	if out == nil {
+		return resp.StatusCode, nil
+	}
+	return resp.StatusCode, json.NewDecoder(resp.Body).Decode(out)
 }

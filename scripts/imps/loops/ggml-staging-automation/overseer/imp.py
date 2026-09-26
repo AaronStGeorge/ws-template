@@ -2,8 +2,8 @@
 """Imp: check on the ggml-bump loop and keep the human's one thread
 about it current.
 
-Paired with the condition.py beside it; `scripts/imps/README.md` is the
-record of the pair. `BRIEF` below is the *brief*: the loop's own
+Paired with the sensor.py beside it; the loop's README
+(`../README.md`) is the record of the pair. `BRIEF` below is the *brief*: the loop's own
 judgment, saying how its pieces fit together and what counts as needing
 a human. This overseer is specific to the ggml-bump loop — the loop
 name, brief, and imp names are constants. A generic overseer can wait
@@ -42,9 +42,10 @@ that prefix in `claude agents --json --all`, newest `startedAt` first.
 3. Act on the verdict against the thread:
    - no thread, needs a human → open a new thread;
    - thread, needs a human, same issue → resume it with the new verdict
-     (`claude stop` if alive, then `--bg --resume`, which keeps the
-     same id, name and Remote Control; the thread compares, re-verifies,
-     pushes one status line, and honors what the human told it earlier);
+     (`claude stop` if alive, wait until the listing shows it gone, then
+     a bare `--bg --resume`, which wakes the same id, name, settings and
+     Remote Control; the thread compares, re-verifies, pushes one status
+     line, and honors what the human told it earlier);
    - thread, needs a human, different issue → archive it, open a new one;
    - thread, no human needed → the issue is resolved: archive it,
      silently (absence of pings says the same as a closing one would);
@@ -58,6 +59,18 @@ list and the transcript are the memory across days.
 Deliberately no check for whether the human is mid-conversation with
 the thread when a slot runs: the odds are slim, and the resumed thread
 can tell from its own context where things stand.
+
+`claude stop` returns before the session's process is gone. A resume
+issued in that window does not wake the session: Claude Code sees it
+still running and starts a *copy* under a new id and an auto-generated
+name, without the saved settings. The copy's push is then dropped by
+the presence check, the next check cannot find it by the thread prefix,
+and the human's own session sits stopped. So a stop is followed by a
+bounded wait for the listing to show the session gone, and a resume
+whose output announces a copy is a failed Run: the copy is stopped and
+removed and the Run exits nonzero, so the next check sees the failure
+in `impctl runs` instead of a silently forked thread. This bit once, the
+first time the resume path ran in production.
 
 # Other decisions
 
@@ -83,7 +96,7 @@ Exit code: 0 whenever the check completed, whatever its verdict —
 `needs_human` is not a failure. Nonzero only when the check or the
 thread handling itself broke (codex or claude failing, a schema breach);
 the next slot's check sees that failed Run in `impctl runs`. If the
-Daemon or the ticker dies, nothing tells anyone — accepted.
+Daemon dies, nothing tells anyone — accepted.
 
 Under impd stdout is discarded and stderr is the Run's log, so every
 child's stdout is redirected onto stderr.
@@ -95,10 +108,11 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
+ROOT = HERE.parents[4]
 LOOP_README = HERE.parent / "README.md"
 IMP_NAMES = "`fix-llama-bump`, `repoint-llama-bump`"
 THREAD_PREFIX = "oversee-ggml-bump-"
@@ -107,6 +121,11 @@ THREAD_SETTINGS = json.dumps(
 )
 IMP_DIR = ROOT / ".imp"
 IMPCTL = ROOT / "build" / "bin" / "impctl"
+
+# How long a stopped thread may take to leave the running state before
+# the Run gives up; `claude stop` is asynchronous (see the header).
+STOP_WAIT_SECONDS = 30
+STOP_POLL_SECONDS = 0.5
 
 # Where Claude Code keeps session transcripts: one jsonl per session,
 # under a directory named for the cwd with every non-alphanumeric
@@ -122,7 +141,7 @@ BRIEF = """\
 # Overseer brief: the ggml-bump loop
 
 This brief is the overseer's judgment for the `ggml-bump` loop. The
-loop's mechanics are in `scripts/imps/ggml-staging-automation/README.md`
+loop's mechanics are in `scripts/imps/loops/ggml-staging-automation/README.md`
 (workspace-relative); read it if a detail here is not enough.
 
 ## What the loop does
@@ -130,11 +149,11 @@ loop's mechanics are in `scripts/imps/ggml-staging-automation/README.md`
 An automation in ROCm/ggml-staging-automation opens bump PRs (head
 branch `users/automation/bump-submodules`) that move the llama.cpp and
 hrx-system submodule pins. When such a PR's CI is red, the standing
-sensor launches `fix-llama-bump` (Run Id `fix-bump-pr-<N>`), which
+Sensor launches `fix-llama-bump` (Run Id `fix-bump-pr-<N>`), which
 repairs the break in llama.cpp and drives the PR green. If the repair
 needed a llama.cpp change upstream still lacks, that Run pushes the fix
 to a personal fork, retargets the bump PR at the fork, opens an upstream
-llama.cpp PR (AMD-Ecosystem/llama.cpp), and arms a clearing watch on it.
+llama.cpp PR (AMD-Ecosystem/llama.cpp), and arms a one-shot Watch on it.
 When the upstream PR merges, `repoint-llama-bump` (Run Id
 `fix-bump-pr-<N>-repoint`) repoints the bump PR at the merged upstream
 and watches its CI.
@@ -147,7 +166,7 @@ duplicate launch. Nothing in the loop reports that case.
 
 - An upstream llama.cpp PR opened by a fix Run is open and waiting for
   review or merge. Find it in the fix Run's log (the handoff names it)
-  or in the pending clearing watch's argv. The human must chase the
+  or in the pending one-shot Watch's argv. The human must chase the
   review or merge it.
 - A bump PR is green and ready to merge (after a fix Run, or after a
   repoint). The loop never merges; the human does.
@@ -156,17 +175,17 @@ duplicate launch. Nothing in the loop reports that case.
   not be fixed in llama.cpp alone (the handoff describes the hrx-system
   change needed); a red PR after a repoint (the Run log holds a
   diagnosis).
-- A pending clearing watch whose upstream PR is CLOSED without merging.
-  The watch will pend forever; the human decides.
+- A pending one-shot Watch whose upstream PR is CLOSED without merging.
+  The Watch will pend forever; the human decides.
 - A bump PR that is red and already has a `fix-bump-pr-<N>` Run — red
   again after its fix. This is the silent case above.
 
 ## Fine to ignore
 
 - A Run in state `running`. Fix Runs can take hours.
-- A pending clearing watch whose upstream PR is OPEN with recent review
+- A pending one-shot Watch whose upstream PR is OPEN with recent review
   activity. Say so in the findings, but it is not a summons.
-- A bump PR that is red with no fix Run yet and the standing sensor's
+- A bump PR that is red with no fix Run yet and the standing Sensor's
   last tick recent: the loop will pick it up.
 - An empty `impctl runs` right after a Daemon restart: Run state is
   in-memory. The logs under `.imp/runs/` are the record.
@@ -210,12 +229,13 @@ arming. You only read and judge.
 # Where to look
 
 - This loop's imps: {imp_names}. Their Runs: `{impctl} runs` (one JSON
-  document per line; states succeeded/failed/running). Run state is
-  in-memory only, so a Daemon restart empties it — the logs survive.
+  document per line: `sigil`, `id`, `path`, `state`, `error`; states
+  succeeded/failed/running). Run state is in-memory only, so a Daemon
+  restart empties it — the logs survive.
 - Run logs: `{imp_dir}/runs/<run-id>.log`.
-- Armed watches: `{imp_dir}/watches.jsonl` (`clear: true` rows are
-  one-shot waits armed by imps; standing rows re-fire every tick).
-  Their diagnostics: `{imp_dir}/watch.log`.
+- Armed Watches: `{impctl} watches` (one JSON document per line;
+  `once: true` are one-shot waits armed by imps; the others are standing
+  and re-fire every Tick). Their diagnostics: `{imp_dir}/watch.log`.
 - GitHub state: `gh pr list`, `gh pr view`, `gh pr checks`.
 - Earlier overseer Runs of this loop are `oversee-ggml-bump-*`; a failed
   one is itself a finding.
@@ -249,7 +269,7 @@ BROKEN_PROMPT = """\
 The overseer imp for the `ggml-bump` loop is broken and needs a human:
 it could not read this thread's transcript ({reason}). The likely cause
 is a Claude Code update that changed the session transcript format the
-imp reads (`scripts/imps/ggml-staging-automation/overseer/imp.py`,
+imp reads (`scripts/imps/loops/ggml-staging-automation/overseer/imp.py`,
 `extract_transcript`). No check of the loop was run. Send ONE push
 notification with the PushNotification tool saying the overseer is
 broken and why, then wait for the human. CHANGE NOTHING until they tell
@@ -281,7 +301,7 @@ The check's own Run log is `{run_log}`.
 # Where to look
 
 - This loop's imps: {imp_names}. Their Runs: `{impctl} runs`. Logs:
-  `{imp_dir}/runs/<run-id>.log`. Armed watches: `{imp_dir}/watches.jsonl`;
+  `{imp_dir}/runs/<run-id>.log`. Armed Watches: `{impctl} watches`;
   their diagnostics: `{imp_dir}/watch.log`. GitHub: `gh`.
 - `{readme}` describes the loop's pieces.
 """
@@ -315,21 +335,36 @@ def codex_is_usable():
         return False
 
 
-def newest_thread():
-    """The newest session named with the thread prefix, alive or stopped,
-    or None. `--all` is what includes stopped sessions; a stopped thread
-    is still the human's thread until it is archived."""
+def list_sessions():
+    """Every Claude Code session for this workspace, alive or stopped.
+    `--all` is what includes stopped sessions."""
     listing = subprocess.run(
         ["claude", "agents", "--json", "--all", "--cwd", str(ROOT)],
         check=True, stdout=subprocess.PIPE, text=True,
     ).stdout
+    return json.loads(listing)
+
+
+def newest_thread():
+    """The newest session named with the thread prefix, alive or stopped,
+    or None. A stopped thread is still the human's thread until it is
+    archived."""
     threads = [
-        session for session in json.loads(listing)
+        session for session in list_sessions()
         if str(session.get("name", "")).startswith(THREAD_PREFIX)
     ]
     if not threads:
         return None
     return max(threads, key=lambda session: session.get("startedAt", 0))
+
+
+def find_session(session_id):
+    """The listing's current record for one session, or None once it has
+    left the listing entirely."""
+    for session in list_sessions():
+        if session.get("sessionId") == session_id:
+            return session
+    return None
 
 
 def thread_is_alive(thread):
@@ -447,20 +482,59 @@ def short_id(thread):
 
 
 def stop_thread(thread):
-    if thread_is_alive(thread):
-        run_to_log(["claude", "stop", short_id(thread)], check=True)
+    """`claude stop`, then wait until the listing no longer shows the
+    session running. The stop is asynchronous, and a resume issued before
+    it lands forks a copy (see the header); a thread that will not stop
+    inside the wait is a failed Run rather than a guess."""
+    if not thread_is_alive(thread):
+        return
+    run_to_log(["claude", "stop", short_id(thread)], check=True)
+    deadline = time.monotonic() + STOP_WAIT_SECONDS
+    while True:
+        current = find_session(thread["sessionId"])
+        session_is_gone = current is None or not thread_is_alive(current)
+        if session_is_gone:
+            return
+        if time.monotonic() > deadline:
+            raise SystemExit(
+                f"thread {thread['name']!r} still running "
+                f"{STOP_WAIT_SECONDS}s after `claude stop`"
+            )
+        time.sleep(STOP_POLL_SECONDS)
+
+
+# What `claude --resume` prints when it could not wake the session and
+# started a copy instead; the id it names is the copy to clean up.
+COPY_NOTICE = re.compile(r"started a copy as ([0-9a-f]+)")
 
 
 def resume_thread(thread, prompt, why):
     """Resume the thread with a new prompt. A resume must not carry
     flags — those would start a copy; bare, it wakes the same session
-    with its saved name, model, permission mode and Remote Control."""
+    with its saved name, model, permission mode, settings and Remote
+    Control. The resume's output is captured as well as logged, because
+    a copy is only announced there: a copy is a failed Run, not a thread."""
     stop_thread(thread)
-    run_to_log(
+    result = subprocess.run(
         ["claude", "--bg", "--resume", thread["sessionId"], prompt],
         cwd=ROOT,
-        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
     )
+    sys.stderr.write(result.stdout)
+    copy = COPY_NOTICE.search(result.stdout)
+    if copy is not None:
+        copy_id = copy.group(1)
+        run_to_log(["claude", "stop", copy_id])
+        run_to_log(["claude", "rm", copy_id])
+        raise SystemExit(
+            f"thread {thread['name']!r} could not be resumed: claude "
+            f"started a copy ({copy_id}, stopped and removed) instead of "
+            f"waking the session; the thread is stopped and needs a resume"
+        )
+    if result.returncode != 0:
+        raise SystemExit(f"`claude --resume` exited {result.returncode}")
     print(f"thread {thread['name']!r} resumed ({why})", file=sys.stderr)
 
 

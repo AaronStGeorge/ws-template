@@ -1,0 +1,15 @@
+{
+  "sigils": {
+    "fix-llama-bump": "scripts/imps/loops/ggml-staging-automation/fix-llama-bump/imp.py",
+    "repoint-llama-bump": "scripts/imps/loops/ggml-staging-automation/repoint-llama-bump/imp.py",
+    "overseer": "scripts/imps/loops/ggml-staging-automation/overseer/imp.py"
+  },
+  "watches": [
+    ["scripts/imps/loops/ggml-staging-automation/fix-llama-bump/sensor.py"],
+    ["scripts/imps/loops/ggml-staging-automation/overseer/sensor.py",
+     "--at", "09:00,14:00",
+     "--tz", "America/Boise",
+     "--model", "gpt-6-astra",
+     "--effort", "medium"]
+  ]
+}

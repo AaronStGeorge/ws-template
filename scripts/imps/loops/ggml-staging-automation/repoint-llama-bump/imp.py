@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Imp: repoint a bump PR from the validation fork to merged upstream.
 
-Launched by its paired sensor, the condition.py beside this file, which
+Launched by its paired Sensor, the sensor.py beside this file, which
 the fix imp (../fix-llama-bump/imp.py) arms; the
 ggml-staging-automation README section `repoint-llama-bump` is the
 authoritative boundary. Argv carries the merged upstream PR URL then
@@ -61,7 +61,7 @@ import time
 from pathlib import Path
 
 # Both patterns are the provenance gate: argv normally comes from
-# condition.py's already-validated Launch Body, but humans launch by hand
+# sensor.py's already-validated Launch, but humans launch by hand
 # too, so anything but the two real PR-URL shapes is refused before any
 # subprocess starts. The bump capture group is the PR number the slug
 # derives from. STAGING_PR_URL is duplicated from the fix imp —
@@ -205,7 +205,7 @@ def main():
         )
     bump_pr_url = bump_match.group(0)
 
-    # slug == the Run Id convention condition.py emits, so the /tmp
+    # slug == the Run Id convention sensor.py emits, so the /tmp
     # workspace traces to its Run without this process ever being told its
     # Run Id.
     slug = f"fix-bump-pr-{bump_match.group(1)}-repoint"

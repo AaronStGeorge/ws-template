@@ -1,0 +1,4 @@
+{
+  "sigils": {"echo": "scripts/imps/loops/echo/imp.py"},
+  "watches": [["scripts/imps/loops/echo/sensor.py"]]
+}
