@@ -1,0 +1,6 @@
+{
+  "sigils": {
+    "fix-llama-perplexity": "scripts/imps/ggml-staging-automation/fix-llama-perplexity/imp.py"
+  },
+  "watches": []
+}
