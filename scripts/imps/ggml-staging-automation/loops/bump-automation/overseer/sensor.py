@@ -45,7 +45,7 @@ def parse_slots(text):
 
 def main():
     # argv is the provenance boundary — a human types the arm line into
-    # imps.json — so a bad slot or zone crashes visibly on every Tick.
+    # bump-loop.json — so a bad slot or zone crashes visibly on every Tick.
     parser = argparse.ArgumentParser()
     parser.add_argument("--at", required=True, help="HH:MM, comma-separated")
     parser.add_argument("--tz", required=True, help="IANA zone, e.g. America/Boise")

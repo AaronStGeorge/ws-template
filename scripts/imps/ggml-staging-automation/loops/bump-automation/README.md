@@ -1,28 +1,31 @@
-# The ggml-staging-automation bump loop
+# The bump-automation loop
 
 This directory is this workspace's whole side of the bump loop that
-[docs/imp-design.md](../../../../docs/imp-design.md) tells the story of,
+[docs/imp-design.md](../../../../../docs/imp-design.md) tells the story of,
 and this README is the authoritative record of each executable's boundary.
-The loop's layout follows [../../README.md](../../README.md).
+The loop's layout follows [scripts/imps/README.md](../../../README.md); it
+is one loop of the [ggml-staging-automation](../../README.md) project.
 
-The loop is three Imps, two standing Watches, and one shared helper.
+The loop has three Imps and two standing Watches.
 `fix-llama-bump` repairs a red bump PR and, when it had to change
 llama.cpp, opens the upstream PR and arms the wait for it.
 `repoint-llama-bump` consumes the merged upstream when that wait fires.
 `overseer` checks on the loop at fixed daily slots and keeps the human's
 one thread about it current. `sync_pr_body.py` keeps the bump PR's
-description truthful while the other two move its llama.cpp pin. All of
-them clone `ROCm/ggml-staging-automation` from GitHub and depend on no
-checkout under `sources/`.
+description truthful while the bump Imps move its llama.cpp pin. The
+project's shared [build.py](../../build.py) provides local build
+infrastructure for the fix Imp. All of them clone
+`ROCm/ggml-staging-automation` from GitHub and depend on no checkout under
+`sources/`.
 
-The Manifest, [imps.json](imps.json), inscribes the three Sigils and
-declares two standing Watches: the fix Sensor with no arguments, and the
+The Manifest, [bump-loop.json](bump-loop.json), inscribes the three Sigils
+and declares two standing Watches: the fix Sensor with no arguments, and the
 overseer's Sensor with its slots (`09:00,14:00 America/Boise`, a few hours
 after the daily bump workflow at 11:00 UTC) and the codex model and effort
 for the check. Bring it up with:
 
 ```sh
-impctl up --manifest scripts/imps/loops/ggml-staging-automation/imps.json
+impctl up --manifest scripts/imps/ggml-staging-automation/loops/bump-automation/bump-loop.json
 ```
 
 Prerequisites: `gh`, `codex`, and `claude` logged in, and `impctl` on
@@ -65,7 +68,7 @@ reconcile Watch before the green check, so a stuck Run that opened an
 upstream PR still leaves the days-long wait armed:
 
 ```sh
-impctl watch --once -- <ws>/scripts/imps/loops/ggml-staging-automation/repoint-llama-bump/sensor.py <upstream-pr-url> <bump-pr-url>
+impctl watch --once -- <ws>/scripts/imps/ggml-staging-automation/loops/bump-automation/repoint-llama-bump/sensor.py <upstream-pr-url> <bump-pr-url>
 ```
 
 `codex login status` must pass before anything is cloned. codex can go
@@ -142,18 +145,23 @@ can wait until more loops show what is generic.
 **Thread** — the human's channel for this loop: a Claude Code session
 (`claude --bg --remote-control`, Fable, auto permissions) that digs into
 what a check found, pushes one headline to the human's phone, and waits to
-be directed, changing nothing until told to. There is at most one thread
-per loop, named after the Run that opened it and found by that prefix in
+be directed, changing nothing until told to. The newest thread is
+current, named after the Run that opened it and found by that prefix in
 `claude agents --json --all`, newest first.
 
 **Check** — one `codex exec`, pinned to the Manifest's model and effort,
 schema-forced to `{needs_human, headline, findings, same_issue}`, given
 the brief, the live state (`impctl runs`, `.imp/`, `gh`), and the thread's
 transcript so far. It runs at every slot whether or not anything is wrong.
+The Daemon lists every imp in the workspace, so the brief has the check
+judge only this loop's Runs; a failed standalone Imp is not its summons.
 
 **Archive** — `claude stop` then `claude rm`: the session leaves the
 active list; its transcript stays on disk, resumable by the id in the Run
-log. No thread state is kept anywhere else.
+log. No thread state is kept anywhere else. Archival is best effort: a
+failure to stop or remove the old thread is logged, added to the
+replacement thread's findings when there is one, and never fails the Run,
+so a stale thread can linger behind the current one.
 
 `overseer/sensor.py` emits, on every Tick, one Launch per slot
 already past in the zone's local day, under Run Id
@@ -188,8 +196,8 @@ the check, because it is the loop's likeliest failure and would blind the
 check itself; Claude is still available when codex is not.
 
 The Run exits 0 whenever the check completed, whatever its verdict;
-`needs_human` is not a failure. Nonzero means the check or the thread
-handling itself broke, and the next slot's check sees that Run. If the
+`needs_human` is not a failure. Nonzero means the check or thread opening
+or resuming broke, and the next slot's check sees that Run. If the
 Daemon dies, the overseer dies with it and nothing reports it;
 `impctl status` is the manual check for that.
 

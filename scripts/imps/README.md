@@ -1,16 +1,18 @@
-# Imp loops
+# Imps
 
-Everything imp in this workspace lives here. A Loop is one directory under
-[loops/](loops/) holding the Imps, Sensors, and Manifest that
-form one automation; the runtime that runs them is
-[tools/README.md](../../tools/README.md) and the Language and contracts
-they honor are [docs/imp-design.md](../../docs/imp-design.md). This README
-is how loops are laid out, brought up, and written.
+Everything imp in this workspace lives here. A Loop is one directory
+holding the Imps, Sensors, and Manifest that form one automation; a
+standalone Imp is one a human launches by hand, with a Sigil but no
+Sensor. The runtime that runs them is [tools/README.md](../../tools/README.md)
+and the Language and contracts they honor are
+[docs/imp-design.md](../../docs/imp-design.md). This README is how imps
+are laid out, brought up, and written.
 
-## Running this workspace's loops
+## Running this workspace's imps
 
 ```sh
-impctl up --manifest scripts/imps/loops/ggml-staging-automation/imps.json
+impctl up --manifest scripts/imps/ggml-staging-automation/loops/bump-automation/bump-loop.json \
+          --manifest scripts/imps/ggml-staging-automation/standalone-imps.json
 impctl status
 impctl down
 ```
@@ -22,19 +24,30 @@ Daemon and with it every Watch, including a one-shot armed mid-Run;
 re-arming one is a human step. Each loop's README lists what its Imps
 need logged in or on `PATH`.
 
-## How a loop is laid out
+## How imps are laid out
+
+Imps are grouped by the project they act on: one directory per project
+under `scripts/imps/`, such as
+[ggml-staging-automation/](ggml-staging-automation/). Inside it, `loops/`
+holds one directory per loop, and each standalone Imp has its own
+directory beside `loops/`. Scripts shared by a project's Imps sit at the
+project level. [loops/echo/](loops/echo/) is the exception: it acts on
+nothing and stays directly under `scripts/imps/` as the reference example.
 
 A loop is directory-per-imp: each Imp's entry point is its `imp.py`, the
 Sensor that launches it is the `sensor.py` beside it, and
-its private resources sit alongside. Scripts two Imps share sit one level
-up, in the loop directory, and each Imp resolves them relative to its own
-file; Imps never import across directories. Imps useful to several loops
-would live directly under `scripts/imps/`, beside `loops/`; none exist yet.
+its private resources sit alongside. Scripts two of a loop's Imps share
+sit one level up, in the loop directory. Each Imp resolves shared scripts
+relative to its own file and copies them into its run workspace; Imps
+never import across directories.
 
-The loop's `imps.json` is its Manifest, per the design record's shape. A
-loop's overseer, when it has one, is an ordinary pair of entries in it: an
-`overseer` Sigil and a standing Watch on that Imp's `sensor.py` with its
-schedule as arguments.
+Each loop's Manifest is a JSON file named for the loop, such as
+`bump-loop.json`, per the design record's shape. A project's standalone
+Imps share one Manifest, `standalone-imps.json`, with Sigils and no
+Watches, so `impctl launch` can name them. A loop's overseer, when it has
+one, is an ordinary pair of entries in its Manifest: an `overseer` Sigil
+and a standing Watch on that Imp's `sensor.py` with its schedule as
+arguments.
 
 Editing a standing Watch's argv in a Manifest and re-running `up` adds a
 second Watch beside the old one, because the Daemon matches on exact
@@ -117,12 +130,16 @@ Rules the existing loops learned:
   is not executable, so the mistake surfaces where you typed the path
   rather than as a failed Run or a watch-log line every Tick.
 
-## The loops
+## The imps
 
 - [loops/echo/](loops/echo/): the reference example above. It runs no
   automation.
-- [loops/ggml-staging-automation/](loops/ggml-staging-automation/): the
-  bump loop the design record's story is about, with its overseer. An
+- [ggml-staging-automation/](ggml-staging-automation/): the imps that act
+  on ROCm/ggml-staging-automation. Its
+  [bump-automation](ggml-staging-automation/loops/bump-automation/) loop is
+  the one the design record's story is about, with its overseer. An
   *overseer* is an Imp whose job is to judge whether a human is needed
   and, if so, get their attention; there is no generic one yet, and what
-  is generic will be clearer once there are more loops.
+  is generic will be clearer once there are more loops. Its standalone
+  `fix-llama-perplexity` Imp investigates one perplexity report entry on
+  demand.

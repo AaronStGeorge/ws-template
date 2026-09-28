@@ -112,7 +112,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[4]
+ROOT = HERE.parents[5]
 LOOP_README = HERE.parent / "README.md"
 IMP_NAMES = "`fix-llama-bump`, `repoint-llama-bump`"
 THREAD_PREFIX = "oversee-ggml-bump-"
@@ -141,7 +141,7 @@ BRIEF = """\
 # Overseer brief: the ggml-bump loop
 
 This brief is the overseer's judgment for the `ggml-bump` loop. The
-loop's mechanics are in `scripts/imps/loops/ggml-staging-automation/README.md`
+loop's mechanics are in `scripts/imps/ggml-staging-automation/loops/bump-automation/README.md`
 (workspace-relative); read it if a detail here is not enough.
 
 ## What the loop does
@@ -170,7 +170,7 @@ duplicate launch. Nothing in the loop reports that case.
   review or merge it.
 - A bump PR is green and ready to merge (after a fix Run, or after a
   repoint). The loop never merges; the human does.
-- A Run failed. Quote the tail of its log. The common cases: codex login
+- A Run of one of this loop's imps failed. Quote the tail of its log. The common cases: codex login
   lapsed (the Run says so before cloning anything); a break that could
   not be fixed in llama.cpp alone (the handoff describes the hrx-system
   change needed); a red PR after a repoint (the Run log holds a
@@ -269,7 +269,7 @@ BROKEN_PROMPT = """\
 The overseer imp for the `ggml-bump` loop is broken and needs a human:
 it could not read this thread's transcript ({reason}). The likely cause
 is a Claude Code update that changed the session transcript format the
-imp reads (`scripts/imps/loops/ggml-staging-automation/overseer/imp.py`,
+imp reads (`scripts/imps/ggml-staging-automation/loops/bump-automation/overseer/imp.py`,
 `extract_transcript`). No check of the loop was run. Send ONE push
 notification with the PushNotification tool saying the overseer is
 broken and why, then wait for the human. CHANGE NOTHING until they tell
@@ -496,7 +496,7 @@ def stop_thread(thread):
         if session_is_gone:
             return
         if time.monotonic() > deadline:
-            raise SystemExit(
+            raise TimeoutError(
                 f"thread {thread['name']!r} still running "
                 f"{STOP_WAIT_SECONDS}s after `claude stop`"
             )

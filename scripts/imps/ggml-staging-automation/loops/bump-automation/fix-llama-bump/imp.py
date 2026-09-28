@@ -329,10 +329,13 @@ def main():
     ).stdout.strip()
 
     # The workspace root comes from this file's own location
-    # (scripts/imps/loops/ggml-staging-automation/fix-llama-bump/imp.py),
-    # used only for the agent-config and .venv symlinks below.
-    ws = Path(__file__).resolve().parents[5]
+    # (scripts/imps/ggml-staging-automation/loops/bump-automation/fix-llama-bump/imp.py),
+    # used only for the agent-config and .venv symlinks below. The project
+    # directory (scripts/imps/ggml-staging-automation) holds the build.py
+    # shared with the standalone imps; the loop directory holds sync_pr_body.py.
+    ws = Path(__file__).resolve().parents[6]
     here = Path(__file__).resolve().parent
+    project = here.parents[2]
     wsdir = Path(tempfile.mkdtemp(prefix=f"{slug}-"))
 
     clone = wsdir / "ggml-staging-automation"
@@ -379,7 +382,7 @@ def main():
     (wsdir / "AGENTS.md").symlink_to(ws / "AGENTS.md")
     (wsdir / "CLAUDE.md").symlink_to(ws / "AGENTS.md")
     (wsdir / ".venv").symlink_to(ws / ".venv", target_is_directory=True)
-    shutil.copy2(here / "build.py", wsdir / "build.py")
+    shutil.copy2(project / "build.py", wsdir / "build.py")
     shutil.copy2(here.parent / "sync_pr_body.py", wsdir / "sync_pr_body.py")
 
     print(f"run workspace: {wsdir}", file=sys.stderr)
