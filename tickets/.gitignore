@@ -1,4 +1,0 @@
-# Cloned target repos live here but are never checked in.
-# This .gitignore keeps the sources/ folder in the repo while ignoring its contents.
-*
-!.gitignore

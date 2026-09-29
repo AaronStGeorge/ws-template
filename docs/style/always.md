@@ -68,6 +68,21 @@ Before adding validation, identify the external source that can violate the
 invariant. If the only answer is “a bug in our checked-in producer,” fix or
 test the producer instead.
 
+### Update controlled producers and consumers together
+
+When all producers, consumers, and data instances are controlled by this
+repository and can be updated together, change them together. Do not add
+backward compatibility code, migration fallbacks, or guards for obsolete
+formats.
+
+For example, a manifest checked into the repository can be updated alongside
+its loader. The loader should implement the current format without handling
+or explicitly rejecting historical formats.
+
+Keep backward compatibility only when an identified consumer or persisted
+data instance cannot be updated with the change. Document that dependency
+and the compatibility it requires.
+
 ### Comment the why at block scale
 
 Between the narrative header (file scale) and the code itself (line scale)
