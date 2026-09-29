@@ -2,7 +2,8 @@
 """Sensor: when an upstream PR merges, emit the repoint launch.
 
 Paired with the imp.py beside it — this Sensor exists only to launch it;
-the imps README is the authoritative record of the pair.
+the loop's README (`../README.md`, one directory above this file's) is
+the authoritative record of the pair.
 
 The reconcile Sensor of the bump loop: argv carries the upstream PR URL to
 watch, then the original bump PR URL. Emits nothing until `gh` reports the

@@ -2,11 +2,12 @@
 """Imp: repoint a bump PR from the validation fork to merged upstream.
 
 Launched by its paired Sensor, the sensor.py beside this file, which
-the fix imp (../fix-llama-bump/imp.py) arms; the
-ggml-staging-automation README section `repoint-llama-bump` is the
-authoritative boundary. Argv carries the merged upstream PR URL then
-the original bump PR URL; exit 0 iff there was nothing to do or the bump PR
-is green on the repointed submodule.
+the fix imp (../fix-llama-bump/imp.py) arms; the loop's README
+(`../README.md`, one directory above this file's), section
+`repoint-llama-bump`, is the authoritative boundary, and its section
+`When this loop needs a human` is the loop's judgment. Argv carries the
+merged upstream PR URL then the original bump PR URL; exit 0 iff there
+was nothing to do or the bump PR is green on the repointed submodule.
 
 First check whether the bump PR is still open — the automation recreates
 bump PRs freely, and any state other than OPEN (CLOSED and MERGED alike)

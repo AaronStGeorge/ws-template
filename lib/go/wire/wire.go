@@ -12,6 +12,8 @@
 // both so neither imports the other.
 package wire
 
+import "time"
+
 // The Daemon's files under the workspace root. LockPath is the
 // single-instance flock, and its contents are the holder's pid: one file,
 // one writer, so there is never a "lock held but no pid" state.
@@ -53,12 +55,19 @@ type Watch struct {
 // state it reports. State moves starting -> running -> succeeded|failed;
 // Path is the executable actually exec'd, captured at launch and never
 // rewritten.
+//
+// Started is the instant the Run Id was claimed, in UTC, set once. It
+// exists so a Client can order Runs, because the listing has no order of
+// its own. It marks the claim, not the exec, so a Run that failed to
+// start carries one too. It is wall-clock time: a clock stepped backwards
+// can misorder two Runs, which is accepted.
 type Run struct {
-	Sigil string  `json:"sigil"`
-	Id    string  `json:"id"`
-	Path  string  `json:"path"`
-	State string  `json:"state"`
-	Error *string `json:"error"`
+	Sigil   string    `json:"sigil"`
+	Id      string    `json:"id"`
+	Path    string    `json:"path"`
+	Started time.Time `json:"started"`
+	State   string    `json:"state"`
+	Error   *string   `json:"error"`
 }
 
 // Launch is the JSON that asks for a Run: what a Client POSTs to /v1/runs

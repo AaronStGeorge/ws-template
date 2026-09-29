@@ -6,23 +6,26 @@ and this README is the authoritative record of each executable's boundary.
 The loop's layout follows [scripts/imps/README.md](../../../README.md); it
 is one loop of the [ggml-staging-automation](../../README.md) project.
 
-The loop has three Imps and two standing Watches.
+The loop has two Imps of its own and two standing Watches.
 `fix-llama-bump` repairs a red bump PR and, when it had to change
 llama.cpp, opens the upstream PR and arms the wait for it.
 `repoint-llama-bump` consumes the merged upstream when that wait fires.
-`overseer` checks on the loop at fixed daily slots and keeps the human's
-one thread about it current. `sync_pr_body.py` keeps the bump PR's
+The workspace's [overseer](../../../overseer/imp.py) checks the newest
+`fix-llama-bump` Run every weekday morning and opens a thread for the
+human when one is needed. `sync_pr_body.py` keeps the bump PR's
 description truthful while the bump Imps move its llama.cpp pin. The
 project's shared [build.py](../../build.py) provides local build
 infrastructure for the fix Imp. All of them clone
 `ROCm/ggml-staging-automation` from GitHub and depend on no checkout under
 `sources/`.
 
-The Manifest, [bump-loop.json](bump-loop.json), inscribes the three Sigils
-and declares two standing Watches: the fix Sensor with no arguments, and the
-overseer's Sensor with its slots (`09:00,14:00 America/Boise`, a few hours
-after the daily bump workflow at 11:00 UTC) and the codex model and effort
-for the check. Bring it up with:
+The Manifest, [bump-loop.json](bump-loop.json), inscribes the loop's two
+Sigils and the workspace's `overseer`, and declares two standing Watches.
+One is the fix Sensor with no arguments. The other is the overseer's
+Sensor with the Sigil to oversee (`fix-llama-bump`), its slot
+(`09:00 America/Boise`, weekdays, a few hours after the daily bump
+workflow at 11:00 UTC), and the codex model and effort for the check.
+Bring it up with:
 
 ```sh
 impctl up --manifest scripts/imps/ggml-staging-automation/loops/bump-automation/bump-loop.json
@@ -133,7 +136,8 @@ Manifest with no arguments. Each Tick it lists open PRs in
 check rollup holds a FAILURE; a rollup still churning is "not yet". The Run
 Id derives from the PR number alone, so a bump PR gets one automatic fix,
 ever: a PR red again after its fix is a silently rejected duplicate, and
-the overseer's brief names that case.
+[When this loop needs a human](#when-this-loop-needs-a-human) names that
+case.
 
 `repoint-llama-bump/sensor.py` is the reconcile Sensor, armed by fix
 Runs as a one-shot Watch with the upstream PR URL then the bump PR URL. It
@@ -142,70 +146,59 @@ launch. Any other state, CLOSED included, is "not yet": a closed-unmerged
 upstream PR keeps the Watch pending forever, on purpose, where the human
 sees it in `impctl watches` and judges.
 
-## The overseer and the thread
+## The overseer
 
-The overseer is this loop's own: its loop name is `ggml-bump`, and its
-brief and Imp names are constants in `overseer/imp.py`. A generic overseer
-can wait until more loops show what is generic.
+The loop has no overseer of its own. Its Manifest declares a standing
+Watch on the workspace's overseer with `--sigil fix-llama-bump`, so each
+weekday slot launches one Run,
+`oversee-fix-llama-bump-<YYYY-MM-DD>-<HHMM>`, that checks the newest
+`fix-llama-bump` Run. How it checks, the thread it opens, and what it
+cannot see are in [its header](../../../overseer/imp.py).
 
-**Thread** — the human's channel for this loop: a Claude Code session
-(`claude --bg --remote-control`, Fable, auto permissions) that digs into
-what a check found, pushes one headline to the human's phone, and waits to
-be directed, changing nothing until told to. The newest thread is
-current, named after the Run that opened it and found by that prefix in
-`claude agents --json --all`, newest first.
+The overseer starts from the fix Run and follows what that Run's log
+names. The repoint Run is reached that way: its Run Id is the fix Run's
+with `-repoint` appended, and the fix Run's log holds the upstream PR and
+the Watch it armed.
 
-**Check** — one `codex exec`, pinned to the Manifest's model and effort,
-schema-forced to `{needs_human, headline, findings, same_issue}`, given
-the brief, the live state (`impctl runs`, `.imp/`, `gh`), and the thread's
-transcript so far. It runs at every slot whether or not anything is wrong.
-The Daemon lists every imp in the workspace, so the brief has the check
-judge only this loop's Runs; a failed standalone Imp is not its summons.
+The judgment it applies is the next section, which it reads from here.
 
-**Archive** — `claude stop` then `claude rm`: the session leaves the
-active list; its transcript stays on disk, resumable by the id in the Run
-log. No thread state is kept anywhere else. Archival is best effort: a
-failure to stop or remove the old thread is logged, added to the
-replacement thread's findings when there is one, and never fails the Run,
-so a stale thread can linger behind the current one.
+## When this loop needs a human
 
-`overseer/sensor.py` emits, on every Tick, one Launch per slot
-already past in the zone's local day, under Run Id
-`oversee-ggml-bump-<YYYY-MM-DD>-<HHMM>` with `HHMM` the slot's configured
-time, so each slot runs once. There is deliberately no firing window: a
-slot missed while the machine was down runs late, and a Daemon restart
-mid-day re-runs the slot.
+This is the loop's judgment: what it leaves for the human and what it
+does not. The overseer's check reads it, and so does the human.
 
-Each check ends in one of five actions against the thread: no thread and
-a human needed opens one; the same issue resumes it with the new verdict
-(it re-verifies, pushes one status line, and honors what the human said
-earlier); a different issue archives it and opens a new one; no human
-needed archives it silently, since absence of pings says what a closing
-one would; nothing and nothing does nothing.
+The loop needs a human when:
 
-A resume waits for the stop to land and treats a forked copy as a failed
-Run. `claude stop` returns before the session's process is gone, and a
-resume issued in that window starts a copy under a new id without the
-saved settings, whose push is then dropped and which the next check
-cannot find. So the stop is followed by a bounded wait for the listing to
-show the session gone, and a resume whose output announces a copy stops
-and removes the copy and exits nonzero, so the next check sees the
-failure in `impctl runs`. This bit once in production.
+- A bump PR is green and ready to merge, after a fix Run or after a
+  repoint. The loop never merges; the human does.
+- An upstream llama.cpp PR opened by a fix Run is open with no recent
+  review activity. The fix Run's log names it in the handoff's
+  `upstream_pr`, and so does the argv of the one-shot Watch the Run
+  armed. The human chases the review or merges it.
+- A bump PR is red again after its fix Run. The Run Id `fix-bump-pr-<N>`
+  is occupied, so the Sensor's relaunch is a rejected duplicate and
+  nothing else reports it.
+- A Run failed and its bump PR is still open. Quote the tail of its log.
+  The common causes: the codex login lapsed (the Run says so before
+  cloning anything); a break that could not be fixed in llama.cpp alone
+  (the log describes the hrx-system change needed); a PR red after a
+  repoint (the log holds a diagnosis).
+- A pending one-shot Watch's upstream PR is CLOSED without merging. The
+  Watch pends forever, on purpose; the human decides.
+- A bump PR MERGED while still pointed at the fork. The repoint Run
+  names the state in its log and does nothing else.
 
-An unreadable thread transcript means the overseer is broken, most likely
-by a Claude Code update, not a check to run with less context: the thread
-is resumed with a "fix me" prompt so the human hears about it and the Run
-exits nonzero.
+The loop does not need a human when:
 
-A lapsed codex login is escalated as a verdict of its own without running
-the check, because it is the loop's likeliest failure and would blind the
-check itself; Claude is still available when codex is not.
-
-The Run exits 0 whenever the check completed, whatever its verdict;
-`needs_human` is not a failure. Nonzero means the check or thread opening
-or resuming broke, and the next slot's check sees that Run. If the
-Daemon dies, the overseer dies with it and nothing reports it;
-`impctl status` is the manual check for that.
+- A Run is `running`. Fix Runs can take hours.
+- An upstream PR is OPEN with recent review activity. Say so in the
+  findings; it is not a summons.
+- A bump PR is red with no fix Run yet and the fix Sensor ticked
+  recently. The loop will pick it up.
+- A Run failed and its bump PR has since merged or closed. That is
+  history: the next bump PR gets its own fix Run.
+- A bump PR was closed and recreated by the automation. The repoint Run
+  for the old one ends green having done nothing.
 
 ## `sync_pr_body.py`
 

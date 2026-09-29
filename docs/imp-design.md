@@ -92,8 +92,8 @@ contract below. Its interior is its own business.
 launches an Imp. Verbs: *inscribe*, *erase*. A name is a slug (see Run Id).
 
 **Run** — one Daemon-owned execution of one Imp under one Run Id, with a
-state (`starting`, `running`, `succeeded`, `failed`) and a log, outliving
-every Client connection and every Sigil change.
+state (`starting`, `running`, `succeeded`, `failed`), a start time, and a
+log, outliving every Client connection and every Sigil change.
 
 **Run Id** — the Client-chosen slug that identifies a Run: lowercase ASCII
 letters and digits, hyphen-joined (`^[a-z0-9]+(-[a-z0-9]+)*$`), at most 64
@@ -203,8 +203,8 @@ resolve from the workspace root.
 
 **The durable record.** Run state lives in the Daemon's memory; the files
 under `.imp/`, laid out in [tools/README.md](../tools/README.md), are the
-record that outlives it, and a Loop that needs to look back (the bump
-loop's overseer does) reads them.
+record that outlives it, and an Imp that needs to look back (the overseer
+does: it reads the log of the Run it checks) reads them.
 
 ### Decisions in force
 
@@ -230,6 +230,9 @@ loop's overseer does) reads them.
   is gone?). A restart forgets every Run Id, so a Sensor that
   re-emits a past Id after a restart re-runs it; accepted.
 - Run observation is poll-only; the Daemon never pushes.
+- A Run records when its Id was claimed, and the listing stays unordered.
+  Ordering is a Client's question, answered by sorting on `started`; the
+  overseer, which needs the newest Run of a Sigil, is its one customer.
 - Re-applying a Manifest is free because inscribe and watch are
   idempotent: the same name at the same path is a no-op (a different path
   replaces, and the response says so), and the same argv with the same
@@ -242,7 +245,7 @@ loop's overseer does) reads them.
 - Ticks happen on a fixed global interval, a compile-time default, plus on
   request, with no startup pass since the Daemon starts empty. Per-Watch
   schedules are not a thing: time-slot logic belongs in the Sensor,
-  as the bump loop's overseer shows.
+  as the overseer's Sensor shows.
 - A Watch is matched on exact argv plus the one-shot flag, so editing a
   standing Watch's argv in a Manifest and re-running `up` adds a second
   Watch beside the old one, removed by hand. Reconciling by executable path

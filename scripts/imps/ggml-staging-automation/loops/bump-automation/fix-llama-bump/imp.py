@@ -2,11 +2,12 @@
 """Imp: drive a failing ggml-staging-automation bump PR to green CI.
 
 Launched by its paired Sensor, the sensor.py beside this file; the
-ggml-staging-automation README (../README.md) section `fix-llama-bump`
-is the authoritative boundary. Argv carries the bump PR URL — the whole
-input; everything else is derived from live GitHub state (no ticket, no
-standing context document). Exit 0 means the bump PR is green; diagnostics
-go to stderr for the Run's log.
+loop's README (`../README.md`, one directory above this file's), section
+`fix-llama-bump`, is the authoritative boundary, and its section `When
+this loop needs a human` is the loop's judgment. Argv carries the bump
+PR URL — the whole input; everything else is derived from live GitHub
+state (no ticket, no standing context document). Exit 0 means the bump
+PR is green; diagnostics go to stderr for the Run's log.
 
 Upstream fixes are consumed, never re-derived — but the check is scoped:
 the bump already pins llama.cpp at upstream's head as of bump time, so
@@ -17,7 +18,7 @@ each step pairs a llama.cpp fix with the break it answers so every pushed
 head is a green llama.cpp bump (a first supervised run pushed a lone
 hrx-system walk-back and was stopped for it). The imp is
 self-contained in this directory: it clones ROCm/ggml-staging-automation
-directly from GitHub and copies the ``build.py`` beside this file into the
+directly from GitHub and copies the project's shared ``build.py`` into the
 run workspace — local validation is minutes where a CI round is ~an hour —
 with no dependency on any checkout under sources/.
 
@@ -75,7 +76,7 @@ Prep performed before codex starts, and why (spike-proven):
   reason: the imp never changes hrx-system (only its pin moves, inside
   the staircase), and a break that needs an hrx-system change ends the
   Run with the problem in the handoff instead of a workaround.
-- ``sync_pr_body.py`` copy (shared by both imps, one level up): the bump
+- ``sync_pr_body.py`` copy (shared by both bump imps, one level up): the bump
   PR's body names a llama.cpp pin the staircase moves; the agent runs
   this after every push to the PR branch
   to keep the body truthful, and the wrapper runs it once more after the

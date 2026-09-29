@@ -228,7 +228,8 @@ func (d *daemon) launch(body wire.Launch) (wire.Run, error) {
 	// make the record disagree with what gets exec'd. The duplicate check
 	// here is load-bearing: "a Run Id has at most one Run" is what lets
 	// Sensors re-emit the same Launch every Tick and have duplicates
-	// rejected, not re-run.
+	// rejected, not re-run. Started is read inside the same hold, so the
+	// order of `started` values is the order of the claims.
 	d.mu.Lock()
 	path, sigilKnown := d.sigils[body.Sigil]
 	if !sigilKnown {
@@ -240,7 +241,13 @@ func (d *daemon) launch(body wire.Launch) (wire.Run, error) {
 		d.mu.Unlock()
 		return wire.Run{}, errDuplicateRun
 	}
-	d.runs[body.Id] = &wire.Run{Sigil: body.Sigil, Id: body.Id, Path: path, State: "starting"}
+	d.runs[body.Id] = &wire.Run{
+		Sigil:   body.Sigil,
+		Id:      body.Id,
+		Path:    path,
+		Started: time.Now().UTC(),
+		State:   "starting",
+	}
 	d.mu.Unlock()
 
 	// From here on the Run exists no matter what, so every failure path

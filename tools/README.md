@@ -103,7 +103,7 @@ here and trusted downstream.
 | `GET /v1/watches` | 200, `[{"id","argv","once"}]` id-sorted | | Ids start at 1 and reset with the process. |
 | `POST /v1/watches` `{"argv","once"}` | 201 new; 200 the existing Watch | 400 empty argv | Matched on exact argv plus `once`. `argv[0]` is not resolved: an unrunnable Sensor shows up in the watch log. |
 | `DELETE /v1/watches/{id}` | 204 | 400 non-integer, 404 | A Watch removed mid-Tick finishes that pass and is absent from the next. |
-| `GET /v1/runs` | 200, `[run]` in no particular order | | |
+| `GET /v1/runs` | 200, `[run]` in no particular order | | A Client that needs an order sorts by `started`. |
 | `POST /v1/runs` Launch | 202 with the Run document and a `Location` header | 400 invalid Run Id or unknown Sigil; 409 Run Id occupied | 202 is returned even when the Run has already `failed` to start (bad path): the document says so. |
 | `GET /v1/runs/{id}` | 200 | 404 | The poll target. |
 | `POST /v1/tick` | 200, `{"watches","launched","duplicates","dropped"}` | | Synchronous: answers when the pass is done. |
@@ -111,12 +111,17 @@ here and trusted downstream.
 The Run document is both the in-memory record and the wire format:
 
 ```json
-{"sigil": "echo", "id": "echo-standing", "path": "scripts/imps/loops/echo/imp.py", "state": "succeeded", "error": null}
+{"sigil": "echo", "id": "echo-standing", "path": "scripts/imps/loops/echo/imp.py", "started": "2026-09-29T15:04:05.123456789Z", "state": "succeeded", "error": null}
 ```
 
 `state` moves `starting` → `running` → `succeeded` | `failed`; `error` is
 null or the reason (`exit status 1`, or the exec error for a path that
 could not be started). `path` is captured at launch and never rewritten.
+
+`started` is the instant the Run Id was claimed, in UTC, as RFC 3339 with
+up to nanoseconds. It is set once, and a Run that failed to start has one
+too. Parse it to compare it: trailing zeros of the fraction are trimmed,
+so text order is not time order.
 
 ### What a Tick does
 

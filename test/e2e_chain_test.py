@@ -11,6 +11,10 @@ gone and the standing Watch kept; a second `tick` and a second `up` must
 change nothing; Sigil replace and erase must leave Runs untouched; `down`
 must leave no Daemon and no socket.
 
+Each Run's `started` must be a UTC instant that orders the Runs by their
+claims and reaches `impctl runs` exactly as the socket gave it, because
+ordering by it is how a Client finds the newest Run of a Sigil.
+
 Every subprocess runs with cwd = the temp workspace root: cwd is imp's
 whole discovery mechanism (one Daemon per workspace), so the check is
 self-contained and never touches this repo's own .imp/. The echo loop is
@@ -40,6 +44,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime, timedelta
 
 ECHO_LOOP = "scripts/imps/loops/echo"
 MANIFEST = f"{ECHO_LOOP}/imps.json"
@@ -177,6 +182,16 @@ def main():
                 assert run["sigil"] == "echo", run
                 assert run["path"].endswith("echo/imp.py"), run
 
+            # `started` is parsed, never compared as text: Go trims
+            # trailing zeros from the fraction, so text order is not time
+            # order. A Tick runs Watches in id order and the standing
+            # Watch was created first, so its Run is claimed first.
+            token_started = datetime.fromisoformat(token_run["started"])
+            standing_started = datetime.fromisoformat(standing_run["started"])
+            for started in (token_started, standing_started):
+                assert started.utcoffset() == timedelta(0), started
+            assert standing_started < token_started, (standing_run, token_run)
+
             # 5. Fired-means-dropped for the one-shot; the standing Watch
             # is never dropped by the Daemon.
             watches = ctl_json("watches")
@@ -209,6 +224,12 @@ def main():
             runs = ctl_json("runs")
             assert len(runs) == 2, runs
             assert all(r["path"] == echo_path for r in runs), runs
+            # Set once, and printed by impctl as the socket gave it.
+            started_at_launch = {
+                token_run["id"]: token_run["started"],
+                standing_run["id"]: standing_run["started"],
+            }
+            assert {r["id"]: r["started"] for r in runs} == started_at_launch, runs
             recreated = ctl_json("inscribe", "echo", echo_path)[0]
             assert recreated["outcome"] == "created", recreated
 

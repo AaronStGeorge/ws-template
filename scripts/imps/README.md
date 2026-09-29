@@ -31,8 +31,9 @@ under `scripts/imps/`, such as
 [ggml-staging-automation/](ggml-staging-automation/). Inside it, `loops/`
 holds one directory per loop, and each standalone Imp has its own
 directory beside `loops/`. Scripts shared by a project's Imps sit at the
-project level. [loops/echo/](loops/echo/) is the exception: it acts on
-nothing and stays directly under `scripts/imps/` as the reference example.
+project level. Two things act on no project and stay directly under
+`scripts/imps/`: [loops/echo/](loops/echo/), the reference example, and
+[overseer/](overseer/), which serves every loop.
 
 A loop is directory-per-imp: each Imp's entry point is its `imp.py`, the
 Sensor that launches it is the `sensor.py` beside it, and
@@ -44,10 +45,9 @@ never import across directories.
 Each loop's Manifest is a JSON file named for the loop, such as
 `bump-loop.json`, per the design record's shape. A project's standalone
 Imps share one Manifest, `standalone-imps.json`, with Sigils and no
-Watches, so `impctl launch` can name them. A loop's overseer, when it has
-one, is an ordinary pair of entries in its Manifest: an `overseer` Sigil
-and a standing Watch on that Imp's `sensor.py` with its schedule as
-arguments.
+Watches, so `impctl launch` can name them. A loop that wants overseeing
+adds two ordinary entries to its Manifest, as
+[Overseeing a loop](#overseeing-a-loop) describes.
 
 Editing a standing Watch's argv in a Manifest and re-running `up` adds a
 second Watch beside the old one, because the Daemon matches on exact
@@ -86,7 +86,7 @@ watch 1 standing (created): scripts/imps/loops/echo/sensor.py
 $ impctl tick
 {"watches":1,"launched":1,"duplicates":0,"dropped":0}
 $ impctl runs
-{"sigil":"echo","id":"echo-standing","path":"scripts/imps/loops/echo/imp.py","state":"succeeded","error":null}
+{"sigil":"echo","id":"echo-standing","path":"scripts/imps/loops/echo/imp.py","started":"2026-09-29T15:04:05.123456789Z","state":"succeeded","error":null}
 $ cat .imp/runs/echo-standing.log
 standing-token
 $ impctl tick
@@ -100,7 +100,7 @@ watch 1 standing (existing): scripts/imps/loops/echo/sensor.py
 A real loop differs from echo in three ways. Its Sensor has a
 condition: it queries the world (`gh`, the clock) and emits nothing when
 the answer is "not yet". Its Run Ids derive from the thing discovered
-(`fix-bump-pr-<N>` from a PR number, `oversee-<loop>-<date>-<HHMM>` from
+(`fix-bump-pr-<N>` from a PR number, `oversee-<sigil>-<date>-<HHMM>` from
 a slot's configured time, never the Tick's), so the same discovery is the
 same Id on every Tick and never tracked. And its Imp may arm a follow-on
 wait before it exits, which a Tick days later fires with no process having
@@ -130,16 +130,46 @@ Rules the existing loops learned:
   is not executable, so the mistake surfaces where you typed the path
   rather than as a failed Run or a watch-log line every Tick.
 
+## Overseeing a loop
+
+An *overseer* is an Imp whose job is to judge whether a human is needed
+and, if so, get their attention. The workspace has one,
+[overseer/](overseer/), and it serves every loop: it is told a Sigil,
+finds the newest Run under it, and checks on that Run. Its
+[header](overseer/imp.py) is the record of how, and of what it cannot
+see.
+
+A loop asks to be overseen with two entries in its Manifest. The Sigil
+line is the same in every Manifest, because Sigil names are global in the
+Daemon and re-inscribing the same path is a no-op. The Watch names the
+Sigil to oversee, the weekday slot, and the check's codex knobs:
+
+```json
+{
+  "sigils": {"overseer": "scripts/imps/overseer/imp.py"},
+  "watches": [["scripts/imps/overseer/sensor.py",
+               "--sigil", "fix-llama-bump",
+               "--at", "09:00", "--tz", "America/Boise",
+               "--model", "gpt-6-astra", "--effort", "medium"]]
+}
+```
+
+The overseer asks two things of the loop in return. The overseen Imp's
+header names the loop's README by path, because the Imp's path is all the
+check is given. And that README has a section saying when the loop needs
+a human, because that judgment is the loop's and the overseer holds none
+of it. The bump loop's
+[README](ggml-staging-automation/loops/bump-automation/README.md) is the
+example.
+
 ## The imps
 
 - [loops/echo/](loops/echo/): the reference example above. It runs no
   automation.
+- [overseer/](overseer/): the workspace's overseer, described above.
 - [ggml-staging-automation/](ggml-staging-automation/): the imps that act
   on ROCm/ggml-staging-automation. Its
   [bump-automation](ggml-staging-automation/loops/bump-automation/) loop is
-  the one the design record's story is about, with its overseer. An
-  *overseer* is an Imp whose job is to judge whether a human is needed
-  and, if so, get their attention; there is no generic one yet, and what
-  is generic will be clearer once there are more loops. Its standalone
-  `fix-llama-perplexity` Imp investigates one perplexity report entry on
-  demand.
+  the one the design record's story is about, and it is overseen. Its
+  standalone `fix-llama-perplexity` Imp investigates one perplexity
+  report entry on demand.

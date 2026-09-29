@@ -13,13 +13,15 @@ impctl up --manifest scripts/imps/ggml-staging-automation/loops/bump-automation/
           --manifest scripts/imps/ggml-staging-automation/standalone-imps.json
 ```
 
-[loops/bump-automation/](loops/bump-automation/) is the bump loop with its
-overseer; its README is the record of each of its executables.
+[loops/bump-automation/](loops/bump-automation/) is the bump loop; its
+README is the record of each of its executables. Its Manifest has the
+workspace's [overseer](../overseer/imp.py) check the newest
+`fix-llama-bump` Run each weekday.
 [standalone-imps.json](standalone-imps.json) inscribes the standalone
 Sigils so `impctl launch` can name them. A standalone Run shows up in
-`impctl runs` and `.imp/runs/` beside the loop's, but no overseer judges
-it: a failed one is the human's to notice, by the `needs attention` line
-at the end of its log.
+`impctl runs` and `.imp/runs/` beside the loop's, but no overseer Watch
+names a standalone Sigil, so nothing judges it: a failed one is the
+human's to notice, by the `needs attention` line at the end of its log.
 
 ## `fix-llama-perplexity`
 

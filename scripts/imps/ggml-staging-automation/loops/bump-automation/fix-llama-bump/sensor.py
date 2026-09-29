@@ -2,7 +2,8 @@
 """Sensor: discover red bump PRs, emit fix-llama-bump launches.
 
 Paired with the imp.py beside it — this Sensor exists only to launch it;
-the imps README is the authoritative record of the pair.
+the loop's README (`../README.md`, one directory above this file's) is
+the authoritative record of the pair.
 
 The standing Sensor of the bump loop: no arguments; each Tick it queries
 GitHub via `gh` for open automation bump PRs with failing CI in
