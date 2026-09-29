@@ -58,6 +58,12 @@ bump's llama.cpp pin is already in the tree, one merged after it is
 consumed by a plain pin bump, and only what upstream lacks entirely is
 derived here.
 
+When a bump makes a model's perplexity pass where the staging manifest
+(`benchmarks/hrx/model_manifest.json`) expected a failure, the Run removes
+that `"perplexity": "fail"` and its paired `"lemonade-benchmark": "skip"`
+together, so the model is benchmarked again. Green CI cannot enforce this,
+because a skipped check never fails; the Imp's standing instructions do.
+
 If and only if the repair needed a llama.cpp change upstream still lacks,
 the Run pushes it to the personal fork on numbered branches
 (`fix-bump-pr-<N>-1`, ...), retargets the bump PR's `.gitmodules` at the

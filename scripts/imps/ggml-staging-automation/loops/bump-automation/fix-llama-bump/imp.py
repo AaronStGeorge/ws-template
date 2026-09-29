@@ -138,13 +138,19 @@ HANDOFF_SCHEMA = {
     "additionalProperties": False,
 }
 
-# The spike's standing instructions, carried over with three deltas: the
+# The spike's standing instructions, carried over with four deltas: the
 # prompt opens with the job directly (there is no ticket request any more),
-# "check upstream first" leads the working rules, and the handoff
-# additionally reports the upstream PR URL. Everything else — green
-# staircase, push rules, numbered fork branches, upstream-PR creation,
-# pre-authorization, no-round-limit iterate, build.py-first — is the
-# spike's proven text.
+# "check upstream first" leads the working rules, the handoff
+# additionally reports the upstream PR URL, and the manifest-expectations
+# rule is new. Everything else — green staircase, push rules, numbered
+# fork branches, upstream-PR creation, pre-authorization, no-round-limit
+# iterate, build.py-first — is the spike's proven text.
+#
+# The manifest-expectations rule answers fix-bump-pr-82: CI was red on
+# perplexity XPASSes, and the Run dropped the stale `fail` expectations
+# but left their paired lemonade-benchmark `skip`s, so the PR went green
+# with three healthy models still unbenchmarked. Green CI cannot catch
+# that — a skipped check never fails — so the prompt has to say it.
 STANDING_INSTRUCTIONS = """\
 Your job: make CI green on {pr_url}.
 
@@ -243,6 +249,17 @@ Working rules:
 
   - Bump PR: {pr_url}
   - Latest run: [link](<latest run link>).
+- Manifest expectations: `benchmarks/hrx/model_manifest.json` records,
+  per model under `hrx.expected_results`, the checks not expected to
+  pass. A model whose perplexity is expected to fail carries
+  `"perplexity": "fail"` together with `"lemonade-benchmark": "skip"`;
+  the skip stands only while perplexity fails. When a model's perplexity
+  now passes (CI reports it as XPASS), remove BOTH entries in the same
+  commit, so lemonade-benchmark runs for that model again. Removing the
+  `fail` alone turns CI green while the model stays unbenchmarked. An
+  omitted check expects a pass: when the removal leaves `hrx` empty,
+  delete the `hrx` block. The re-enabled lemonade-benchmark must pass in
+  the PR's CI like any other check.
 - Pushing to the PR branch and to the personal fork is standing policy here,
   pre-authorized; contribution-policy files in the repos are no reason to
   pause these pushes.
