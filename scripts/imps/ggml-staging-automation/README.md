@@ -39,19 +39,19 @@ Prerequisites: `gh` and `codex` logged in, SSH access to GitHub, and the
 workspace `.venv`. The Run clones the automation from GitHub into a fresh
 `/tmp/fix-ppl-*` workspace and depends on no checkout under `sources/`.
 
-Each Run repairs exactly one model in exactly one regime, frozen by the
-wrapper before the agent starts. The agent investigates with the Loom
-agent-driven kernel workflow, validates the fix on a matched baseline and
-candidate pair of isolated CI runs over the complete smoke tier, and opens
-a llama.cpp PR against `hrx-graph-develop-v2` from the personal fork.
-hrx-system is never edited or pushed; a compiler defect ends the Run as an
-`hrx_blocker` with a reproducer and handoff instead of a workaround.
+Each Run checks out the supplied run's automation commit and initializes its
+pinned submodules. Codex attempts to reproduce, root-cause and fix the selected
+model/regime using `loom/docs/src/workflows/agent-driven-kernel-development.md`
+inside that checkout's `hrx-system` repository. The existing build driver and
+workspace GPU/style instructions are available in the isolated workspace.
 
-It exits 0 iff `evidence.py` verified the repair from the downloaded CI
-artifacts, never from the agent's self-report: the selected regime fails
-on the baseline and passes on the candidate, every required model and
-regime is present in both reports, and nothing that passed before fails
-now. `already_fixed`, `hrx_blocker`, and `blocked` exit nonzero with the
-handoff and `investigation.md` retained in the run workspace for human
-review. What the agent is told, and what the verifier checks and trusts,
-are the prompt and headers in `imp.py` and `evidence.py`.
+Any repair branch is pushed only to `AaronStGeorge/llama.cpp`. The agent does
+not create a PR, edit HRX, or push automation/HRX changes. Diagnosis without a
+fix is a valid result; there is no prescribed CI batch or independent verifier.
+
+The workspace retains `source-run.json`, `prompt.txt`, and `handoff.md`.
+The Markdown handoff contains reproduction results, root-cause analysis,
+any fix and validation, remaining uncertainty, and an optional pushed branch
+URL. Exit 0 means Codex delivered a report, not a certified repair. Setup,
+execution, or missing/empty-report failures exit nonzero. The workspace and
+report location are printed in the Run log for human review.
