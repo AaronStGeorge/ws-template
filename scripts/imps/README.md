@@ -102,7 +102,7 @@ condition: it queries the world (`gh`, the clock) and emits nothing when
 the answer is "not yet". Its Run Ids derive from the thing discovered
 (`fix-bump-pr-<N>` from a PR number, `oversee-<sigil>-<date>-<HHMM>` from
 a slot's configured time, never the Tick's), so the same discovery is the
-same Id on every Tick and never tracked. And its Imp may arm a follow-on
+same Id on every Tick; Sensors need no discovery history. And its Imp may arm a follow-on
 wait before it exits, which a Tick days later fires with no process having
 waited in between:
 
@@ -117,9 +117,10 @@ Rules the existing loops learned:
   from the Run log. A Sensor's stdout must carry Launches
   only, so capture children's stdout (`stdout=PIPE`, never
   `capture_output`, so their stderr still reaches the watch log).
-- argv is the provenance boundary. The Daemon relays Launch arguments
-  verbatim and humans launch by hand too, so validate arguments at the top
-  of the executable and trust them everywhere below.
+- Validate inputs where an external source can violate their assumptions.
+  Humans can invoke these executables directly, so their entry points check
+  user arguments. Repository-controlled arguments do not become untrusted
+  merely because the Daemon transports them through argv.
 - Name run workspaces and branches after the Run Id. An Imp is never told
   its Run Id, but a slug derived the same way the Sensor derives
   the Id traces everything the Run made back to it.

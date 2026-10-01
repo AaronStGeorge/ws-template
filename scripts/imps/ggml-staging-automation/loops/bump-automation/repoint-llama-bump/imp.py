@@ -1,55 +1,15 @@
 #!/usr/bin/env python3
-"""Imp: repoint a bump PR from the validation fork to merged upstream.
+"""Restore a bump PR to canonical llama.cpp after an upstream merge.
 
-Launched by its paired Sensor, the sensor.py beside this file, which
-the fix imp (../fix-llama-bump/imp.py) arms; the loop's README
-(`../README.md`, one directory above this file's), section
-`repoint-llama-bump`, is the authoritative boundary, and its section
-`When this loop needs a human` is the loop's judgment. Argv carries the
-merged upstream PR URL then the original bump PR URL; exit 0 iff there
-was nothing to do or the bump PR is green on the repointed submodule.
+The paired sensor.py is armed by the fix Imp. ../README.md defines the
+arguments, outcomes, and "When this loop needs a human" judgment used by the
+overseer. Repointing uses Git index edits without initializing submodules;
+Codex is called only to diagnose failed CI and is instructed to change nothing.
 
-First check whether the bump PR is still open — the automation recreates
-bump PRs freely, and any state other than OPEN (CLOSED and MERGED alike)
-makes this Run a green no-op (say which state on stderr and exit 0; the
-next bump PR's fix run absorbs the merged upstream by preference). A bump
-PR that MERGED while still pointed at the fork is a human matter — the
-no-op log line names the state so the human can spot it.
-
-Otherwise the repoint is mechanical — no agent, and no submodule checkout:
-clone the staging repo, check out the PR's head branch, rewrite
-`.gitmodules` (canonical AMD-Ecosystem url, `hrx-graph-develop-v2`
-branch), and pin llama.cpp at the upstream PR's merge commit via
-`git update-index --cacheinfo 160000,<sha>,llama.cpp` — a submodule pin
-is an ordinary tree entry, so the index edit alone suffices and the
-submodule is never initialized. All of it lands as one commit — the
-llama.cpp change complete in itself, hrx-system untouched, per the
-never-alone rule — pushed to the PR's head branch. The PR body is then
-synced from the pushed head by ``sync_pr_body.py`` (shared by both imps,
-one level above this file), so the description's llama.cpp row names the
-canonical pin again.
-
-Then CI decides: `gh pr checks --watch` runs until the checks settle, and
-its exit code is the verdict. Green is expected, because the identical
-change was already validated on this PR via the fork; that expectation is
-why there are no retry semantics.
-
-The watch is gated. Checks take a beat to attach after a push, and until
-they do the PR still reports the previous head's checks — a watch started
-too early returns that stale green in seconds (it happened: PR 57's
-repoint run went green before its CI had begun). So the imp polls until
-the PR's head is the pushed commit and its rollup holds checks, within a
-bounded wait that fails the Run loudly.
-
-Red means launching an agent whose only job is a diagnosis written to
-stderr — a guess at what went wrong and what a human should check, under
-an explicit change-NOTHING rule (no commits, no pushes, no fixes) — and
-exiting nonzero so the failed Run is flagged as needing attention.
-
-impd gotchas: Imp stdout is discarded and stderr is captured as the
-Run's log, so codex's stdout is redirected onto stderr and every wrapper
-print goes there too — nothing meaningful may touch stdout. Paths derive
-from mkdtemp and argv; the daemon-inherited cwd is relied on for nothing.
+The wrapper gates CI on the pushed head before accepting a verdict. There is
+no repair or retry loop here: the fork validation is expected to have tested
+the same change already. Paths come from this file, argv, and the temporary
+workspace; subprocesses use explicit working directories where needed.
 """
 
 import argparse
@@ -61,13 +21,9 @@ import tempfile
 import time
 from pathlib import Path
 
-# Both patterns are the provenance gate: argv normally comes from
-# sensor.py's already-validated Launch, but humans launch by hand
-# too, so anything but the two real PR-URL shapes is refused before any
-# subprocess starts. The bump capture group is the PR number the slug
-# derives from. STAGING_PR_URL is duplicated from the fix imp —
-# imps are self-contained by design, never importing across imp
-# directories.
+# Direct human launches can supply arbitrary URLs. Keep the accepted
+# repositories explicit; the bump capture supplies the workspace slug.
+# The fix Imp has its own pattern because Imps do not import one another.
 UPSTREAM_PR_URL = re.compile(
     r"https://github\.com/AMD-Ecosystem/llama\.cpp/pull/(\d+)"
 )
@@ -179,10 +135,6 @@ def wait_for_checks_to_attach(bump_pr_url, pushed_sha):
 
 
 def main():
-    # The flow: validate argv → closed-PR no-op check → mechanical repoint
-    # (clone, .gitmodules rewrite, cacheinfo pin, one commit, push) →
-    # watch CI for the verdict → on red, diagnosis agent and a failing
-    # exit.
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "upstream_pr_url", help="the merged AMD-Ecosystem/llama.cpp PR URL"
@@ -306,10 +258,7 @@ def main():
         text=True,
     ).stdout.strip()
 
-    # CI is the verdict: `gh pr checks --watch` follows the checks to
-    # completion and exits 0 iff every check passed — that fact alone
-    # decides the Run. The watch only means something once the checks
-    # belong to the commit just pushed; the gate is the header's story.
+    # Do not accept the previous head's CI verdict after pushing a new head.
     wait_for_checks_to_attach(bump_pr_url, pushed_sha)
 
     # Truthful description: rewrite the body's llama.cpp row from the

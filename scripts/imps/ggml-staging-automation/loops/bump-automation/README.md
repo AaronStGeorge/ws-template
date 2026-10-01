@@ -106,7 +106,7 @@ contribution to it.
 
 Otherwise it restores `.gitmodules` to the canonical coordinates
 (`https://github.com/AMD-Ecosystem/llama.cpp.git`, branch
-`hrx-graph-develop-v2`) and the pin moved to the upstream PR's merge
+`hrx-graph-develop-v2`) and moves the pin to the upstream PR's merge
 commit.
 It lands as one commit (`Repoint llama.cpp at merged upstream`) pushed to
 the PR's head branch, hrx-system untouched.
@@ -120,7 +120,8 @@ whose exit code determines success. There is no automatic retry.
 Red launches codex for a diagnosis only, under an explicit change-nothing
 rule; the diagnosis is printed
 to the Run log and the Run exits nonzero so it is flagged as needing
-attention. The run workspace is named after the Run Id, as in the fix Imp.
+attention. The run workspace prefix derives from the bump PR number,
+matching the automatic Run Id; a manual Run Id may differ.
 
 ## The Sensors
 

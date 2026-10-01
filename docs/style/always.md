@@ -83,32 +83,32 @@ Keep backward compatibility only when an identified consumer or persisted
 data instance cannot be updated with the change. Document that dependency
 and the compatibility it requires.
 
+### Give each explanation a home
+
+Use the [component lens](../component-lens.md) to decide what understanding a
+passage should provide. Keep each detailed explanation in the location best
+suited to its readers.
+
+Before adding an explanation, check whether it already exists. Extend or link
+to that account instead of maintaining another explanation at similar depth.
+Brief summaries may repeat facts when readers need them to use the current
+document.
+
+READMEs usually provide orientation, invocation, and outcomes. Headers provide
+file-wide context; comments explain local rationale. Tutorials introduce
+details needed for their examples. These are defaults, not limits on what
+each location may contain.
+
+A link should carry readers to further detail, not replace the explanation
+they came for. For example, a README can say that recovered models resume
+benchmarking while an agent prompt specifies the required manifest edits.
+
 ### Comment the why at block scale
 
-Between the narrative header (file scale) and the code itself (line scale)
-sits block scale: a type, a function, a stanza inside a longer flow. Give
-each nontrivial block a short comment carrying what the code alone cannot:
-
-- **The role in the story** — what this block is for, when its purpose isn't
-  evident from its name and shape ("the manual door: judgment-call
-  relaunches come through here").
-- **The contract being honored** — name the documented term or decision a
-  line exists to satisfy ("stdout carries no meaning in the contract and is
-  discarded"; "per the recorded no-persistence decision").
-- **The load-bearing invariant** — consequences that are invisible at the
-  line ("the 409 here is what makes re-emission idempotent, never
-  duplicated work").
-- **The road not taken** — why the obvious alternative was rejected ("one
-  mutex; the traffic is far too small to earn anything finer-grained").
-- **The flow's shape** — one comment at the top of a long function naming
-  its phases ("validate → claim the id → wire the process → hand the wait
-  to a goroutine").
-
-The test is the same as the component lens's: a comment that restates what
-the line already says is noise — delete it, or rename the code until the
-comment isn't needed. A comment earns its place only by answering a
-question the reader would otherwise have to reconstruct from the wider
-system.
+Place a block's explanation beside the code it concerns. Use the
+[component lens](../component-lens.md#the-point) to decide whether a comment
+adds useful understanding. A block's size or complexity does not itself
+require a comment.
 
 ✅ Preferred:
 
@@ -126,49 +126,21 @@ d.mu.Lock()
 d.mu.Lock()
 ```
 
-### One decision per paragraph
+### One main idea per paragraph
 
-Prose here is read the way code is: a reviewer checks one rule at a time,
-and an agent follows one rule at a time. Give each rule, decision, or
-mechanism its own paragraph, and open it with the sentence that states it.
+Give each paragraph one main idea, stated early. Keep supporting reasons,
+examples, and consequences together when they develop that idea. Start a new
+paragraph when the subject changes or a separate decision needs attention.
 
-The test is the same as for compound conditions: if a paragraph carries
-several things a reader might want to quote, question, or apply separately,
-split it. A paragraph past eight or so lines is a smell; a paragraph whose
-sentences are joined by "and", dashes, or parentheticals to hold more ideas
-is the thing itself.
+### Use narrative headers to orient implementation readers
 
-This applies to READMEs, design records, narrative headers, docstrings, and
-agent instructions alike.
+Use the language's doc-comment form for file-level orientation. Apply the
+[component lens](../component-lens.md#the-frame) to find context an
+implementation reader needs, exploring the wider system when necessary.
 
-### Open each implementation file with a narrative header
+A header should orient readers to the file as a whole and point to relevant
+explanations elsewhere. Keep file-wide contracts and rationale here when this
+is their useful home; put feature-specific rationale beside the feature.
 
-Every substantial implementation file starts with a doc comment, in the
-language's doc-comment form, applying the
-[component lens](../component-lens.md) at file scale. The lens owns the goal
-(transfer a working mental model, never restate the code), the tests for what
-earns its place, and the freedom of form. At file scale its four questions
-become:
-
-- **Language** — briefly define any project-specific term the file's
-  identifiers use whose meaning a newcomer could not guess.
-- **Requirements** — the problem the file solves for the code that depends on
-  it, and the constraints it was written under (a platform, a contract it
-  must honor, a compatibility obligation).
-- **Spec** — the entry points, inputs and outputs, invariants, and failure
-  modes callers can rely on.
-- **Design** — the strategy, plus the decisions and gotchas that would
-  surprise the next reader: ordering constraints, failure handling,
-  trade-offs, and abandoned approaches that illuminate the current shape.
-
-File-scale specifics:
-
-- Understanding why this file matters to the wider system may require
-  exploring the wider system.
-- If the existing file has no header, either leave it off or write one that
-  builds an understanding of the entire file. When adding feature X to a file
-  without a header, don't document only feature X.
-- If a file's purpose is clear without documentation, it needs no header.
-  - Example: `utils.py` contains utility functions
-  - Example: `server_config.json` contains configuration for server X
-  - Example: `thing_test.rs` contains tests for thing
+If the file needs no additional orientation, it needs no header, regardless
+of its size. Do not add a header just to repeat the filename or code.

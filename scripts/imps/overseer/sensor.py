@@ -2,10 +2,9 @@
 """Sensor: emit one overseer launch per weekday slot, for one overseen
 Sigil.
 
-Paired with the imp.py beside it, whose header is the record of the
-pair. A loop that wants overseeing declares this Sensor as a standing
-Watch in its Manifest, with the Sigil to oversee, the slot, and the
-check's codex knobs:
+scripts/imps/README.md#overseeing-a-loop defines how loops opt in. This file
+owns scheduling; imp.py documents the check and its limits. A standing Watch
+passes the overseen Sigil, slot, and Codex settings:
 
     sensor.py --sigil S --at HH:MM --tz ZONE --model M --effort E
 
@@ -51,8 +50,8 @@ def parse_slot(text):
 
 
 def main():
-    # argv is the provenance boundary — a human types the arm line into a
-    # Manifest — so a bad slot or zone crashes visibly on every Tick.
+    # Direct invocation also accepts human input; invalid slots or zones
+    # fail here before a Launch is emitted.
     parser = argparse.ArgumentParser()
     parser.add_argument("--sigil", required=True, help="the Sigil to oversee")
     parser.add_argument("--at", required=True, help="HH:MM")

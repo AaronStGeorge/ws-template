@@ -1,22 +1,10 @@
 #!/usr/bin/env python3
-"""Sensor: when an upstream PR merges, emit the repoint launch.
+"""Wait for an upstream merge before launching the paired repoint Imp.
 
-Paired with the imp.py beside it — this Sensor exists only to launch it;
-the loop's README (`../README.md`, one directory above this file's) is
-the authoritative record of the pair.
-
-The reconcile Sensor of the bump loop: argv carries the upstream PR URL to
-watch, then the original bump PR URL. Emits nothing until `gh` reports the
-upstream PR merged, then emits the single repoint-llama-bump Launch
-(Run Id `fix-bump-pr-<N>-repoint`, N from the bump PR). Armed by
-fix-llama-bump runs as a one-shot Watch (`impctl watch --once`), so it
-normally fires exactly once. Stderr and exit code are diagnostics only.
-
-Any upstream PR state other than MERGED — including CLOSED — is "not
-yet": a closed-unmerged upstream PR keeps the one-shot Watch pending
-forever, which is the wanted behavior, since the human sees it in
-`impctl watches` and judges. Stdout is sacred: the one Launch only — everything
-narrative goes to stderr.
+The fix Imp arms this as a one-shot Watch with the upstream and bump PR URLs.
+../README.md owns that handoff and the Run Id convention. CLOSED without a
+merge deliberately keeps the Watch pending for a human to judge; it is not a
+successful reconciliation. Launches go to stdout, diagnostics to stderr.
 """
 
 import json
@@ -32,10 +20,8 @@ STAGING_PR_URL = re.compile(
 
 
 def main():
-    # argv is the provenance boundary: normally armed by the fix imp
-    # from already-validated values, but `impctl watch` is a command line
-    # a human can also drive — so both arguments are checked here, before any
-    # network call, and a mis-arm crashes visibly on every Tick.
+    # A human can arm this Watch directly with arbitrary URLs; reject a
+    # mis-arm before querying GitHub so every Tick diagnoses the same input.
     exactly_two_arguments = len(sys.argv) == 3
     if not exactly_two_arguments:
         raise SystemExit("usage: sensor.py <upstream-pr-url> <bump-pr-url>")

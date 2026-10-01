@@ -12,7 +12,7 @@ workspace-root venv active so that package imports::
 
     python build.py
     python build.py --no-vulkan
-    python .workspaces/<ticket>/build.py -DIREE_HAL_AMDGPU_TARGETS=gfx1151
+    python /tmp/<run-workspace>/build.py -DIREE_HAL_AMDGPU_TARGETS=gfx1151
 """
 
 from __future__ import annotations

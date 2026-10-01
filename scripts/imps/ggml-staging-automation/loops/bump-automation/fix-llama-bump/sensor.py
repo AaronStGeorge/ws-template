@@ -1,24 +1,11 @@
 #!/usr/bin/env python3
-"""Sensor: discover red bump PRs, emit fix-llama-bump launches.
+"""Discover failing automation bump PRs for the paired fix Imp.
 
-Paired with the imp.py beside it — this Sensor exists only to launch it;
-the loop's README (`../README.md`, one directory above this file's) is
-the authoritative record of the pair.
-
-The standing Sensor of the bump loop: no arguments; each Tick it queries
-GitHub via `gh` for open automation bump PRs with failing CI in
-ROCm/ggml-staging-automation and emits one Launch per discovery, one
-JSON per line on stdout. Run Id `fix-bump-pr-<N>` derives from the PR
-number alone — emission is idempotent because the Daemon rejects duplicate
-Run Ids, so this Sensor never tracks what it already launched. Stderr and
-exit code are diagnostics only (they land in the Daemon's `.imp/watch.log`).
-
-"Red" means the PR's statusCheckRollup holds at least one check whose
-conclusion is FAILURE — a rollup still churning without a failure yet is
-"not yet", and the next Tick sees it again. Only PRs whose head is the
-automation's bump branch count; humans' PRs in the staging repo are none
-of this Sensor's business. Stdout is sacred: Launches only, one JSON
-per line — everything narrative goes to stderr.
+../README.md owns the loop's Sensor boundaries and Run Id conventions. This
+standing Sensor keeps no discovery state: a PR number produces the same Run
+Id each Tick, and the Daemon rejects duplicates while it retains that Id.
+Only the automation's bump branch qualifies; unrelated PRs are outside this
+loop. Launches go to stdout and diagnostics to the watch log via stderr.
 """
 
 import json
@@ -31,9 +18,7 @@ AUTOMATION_HEAD_BRANCH = "users/automation/bump-submodules"
 
 
 def main():
-    # argv is the provenance boundary (the argv is a Manifest's or a human's);
-    # this Sensor takes nothing, so anything present is a mis-arm worth
-    # surfacing in the watch log rather than silently ignoring.
+    # Surface a mis-armed human Watch in the log instead of ignoring its args.
     armed_with_arguments = len(sys.argv) > 1
     if armed_with_arguments:
         raise SystemExit("usage: sensor.py (takes no arguments)")
@@ -77,8 +62,8 @@ def main():
             continue
 
         # One Launch per discovery; the Run Id derives from the PR
-        # number alone, so a bump PR gets at most one automatic fix, ever —
-        # re-emission on later Ticks is a rejected duplicate, not new work.
+        # number alone, so later Ticks are rejected as duplicates during
+        # this Daemon's lifetime. A restart forgets the occupied Run Ids.
         launch_body = {
             "sigil": "fix-llama-bump",
             "id": f"fix-bump-pr-{pr['number']}",

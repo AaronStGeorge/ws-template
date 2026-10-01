@@ -1,44 +1,16 @@
 #!/usr/bin/env python3
-"""Keep a bump PR's description truthful about where llama.cpp points.
+"""Refresh the llama.cpp row after the bump loop changes its pin or remote.
 
-The automation's bump PR body carries a submodule table whose llama.cpp row
-names the tracked repo, branch, and pin. The bump loop then moves that pin
-under the table's feet: the fix imp's staircase retargets llama.cpp at the
-personal fork, and the repoint imp brings it back to canonical at a newer
-commit. Nothing else rewrites the body, so a reviewer reading it mid-loop
-would be told a pin the tree does not have. This script re-derives the row
-from the PR head itself. The hrx-system row is never touched: the loop
-never moves that pin (the never-alone rule), so the bot's cell stays true.
+Both Imp wrappers invoke this executable, and the repair agent calls it after
+pushes. README.md documents invocation and outcomes. Keeping
+it executable also lets the agent use the same operation as the wrappers.
 
-Usage: `sync_pr_body.py <bump-pr-url> [--head <sha>] [--dry-run]`.
-It is a script, not a library, because the agent driving the staircase
-runs commands — it is told to run this after every push to the PR branch,
-the way it runs build.py — and both imps' wrappers run it too as the
-backstop that does not depend on the agent's compliance. It lives one
-level above the imp directories because both imps use it; each imp
-resolves it relative to its own file, and neither imports it.
-
-What it reads from live GitHub state: the llama.cpp submodule entry at the
-head sha (pin and repo url, from the contents API) and the tracked branch
-from `.gitmodules` at that sha. The head sha is `--head` when given, else
-the PR's reported head.
-
-Callers that just pushed must pass `--head` with the sha they pushed.
-Right after a push the PR API can still report the previous head for a
-while, and a sync that trusts it writes the state the branch just left
-(it happened: PR 57's second repoint synced the fork row over the
-canonical pin). The contents API at an explicit sha has no such lag — the
-commit exists the moment the push returns.
-
-What it writes: the llama.cpp row's repo link, branch, and "To" cells,
-overwritten from those facts; the "From" cell is the bot's and stays. A
-body already in sync is left alone, so reruns are free.
-
-Failure modes: an unparseable PR URL is refused before any subprocess; a
-body without the bot's llama.cpp row is left untouched with a warning on
-stderr, so a template drift upstream degrades to "no sync", never to a
-mangled table. Exit code is nonzero only when gh itself fails. Stdout
-stays clean; every message goes to stderr, where the imp Run log lives.
+The row is derived from the contents API and .gitmodules at one commit. A
+caller that just pushed must supply --head: PR 57 once overwrote a canonical
+row with stale fork coordinates because the PR API still reported its old
+head. Only the llama.cpp row is owned here; hrx-system and the bot's "From"
+cell are preserved. An unrecognized table is left intact so template drift
+cannot silently damage the rest of the PR description.
 """
 
 import argparse
@@ -137,7 +109,7 @@ def main():
     )
     args = parser.parse_args()
 
-    # argv is the provenance boundary — the agent or a human types this.
+    # A human or repair agent can supply a PR URL outside the expected shape.
     match = BUMP_PR_URL.fullmatch(args.bump_pr_url)
     if match is None:
         raise SystemExit(f"not a GitHub PR URL: {args.bump_pr_url!r}")

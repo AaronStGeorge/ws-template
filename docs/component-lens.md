@@ -9,28 +9,36 @@ understood or explained.
 
 ## The point
 
-A description of a component exists to transfer a working mental model — a
-reader should be able to *predict the system* afterward, not merely look
-things up — and it must never restate what the code already says. Form is
-free: prose, a diagram, a worked call and its result, a serialization of the
-most important data contract, a data-flow sketch, a walkthrough of one
+A component description should give its intended reader enough understanding
+to use, change, or reason about the component. Choose the scope and detail for
+that reader's task.
+
+Summarize observable behavior when readers need it without inspecting the
+implementation: invocation, outputs, failures, and guarantees can belong in
+documentation even when the code also expresses them. Comments beside code
+should explain context, constraints, or decisions that the adjacent code does
+not make clear.
+
+Judge a passage by the understanding it adds. Remove narration that merely
+translates nearby code into prose. Preserve explanations of non-obvious
+consequences and why plausible alternatives were rejected.
+
+Judge the description as a whole by whether readers can answer the questions
+relevant to their task. An introductory README, an implementation comment, and
+a tutorial need different coverage; none must explain the entire component
+independently.
+
+Form is free: prose, a diagram, a worked call and its result, a serialization
+of the most important data contract, a data-flow sketch, a walkthrough of one
 request — whatever teaches this system fastest. No method is required and
 none is banned; concrete usually beats abstract.
-
-Two tests for any sentence of description:
-
-- Is it just a re-statement of the code? Leave it to the code. Is it an
-  answer to something that can't be in the code — why design X over Y — or
-  something the code states only diffusely? Then it earns its place.
-- Could a reader who saw only the description predict how the component
-  behaves at its boundary, and why it exists?
 
 ## The frame
 
 A system is a tree of components. A component is an abstraction meant to ease
 cognitive load: a boundary drawn so that a person can hold one piece at a
 time, trusting each level's commitments without holding its interior. Each
-component is understood through four questions, in order:
+component is understood through four questions:
 
 - **Language** — the canonical vocabulary at this level: project-specific
   terms whose meaning needs agreement, and ordinary words this system gives a
@@ -46,8 +54,9 @@ component is understood through four questions, in order:
   and trade-offs that shaped it, and the child components it carves out —
   with what it asks of each.
 
-The questions are a checklist for the writer, not an outline for the reader:
-answer them in whatever order and form communicates best.
+Use these questions to find gaps in understanding. They do not require an
+answer in every document; an existing explanation may already serve the
+reader.
 
 ## Rules that give the frame its teeth
 
@@ -59,9 +68,10 @@ answer them in whatever order and form communicates best.
   otherwise state the resulting behavior and keep the mechanism in the
   design. The same line divides invariants: ones consumers may rely on are
   spec, ones only the implementation cares about are design.
-- **Composition contracts live with the composition.** A contract between
-  sibling components is owned once, by the nearest common ancestor's design;
-  each child carries its obligations, never a second authoritative copy.
+- **Composition contracts live with the composition.** Define a contract
+  between sibling components in their nearest common ancestor's design.
+  Children document their own obligations and may summarize the shared
+  contract for local understanding, linking to its definition.
 - **Language is inherited downward.** A child may add local terms or sharpen
   a parent's term for its own boundary, but may not silently contradict or
   redefine ancestral vocabulary. Resolve conflicts where the term was
@@ -69,9 +79,6 @@ answer them in whatever order and form communicates best.
 - **Components split at seams, not at size.** A true component has
   requirements received from above, a spec offered back, and an interior of
   its own. Size is irrelevant; a small system may be a single component.
-  Components are not obliged to follow repository or directory boundaries,
-  but they likely should — when the component tree and the file tree
-  disagree, suspect one of them.
 
 ## Cross-checks the lens enables
 
@@ -83,6 +90,3 @@ The four questions check each other:
   it, is suspect — it is probably a design choice or nobody's need.
 - A spec that exposes an interior choice consumers neither observe nor rely
   on is an abstraction leak.
-- Two independent restatements of one composition contract are competing
-  authorities, not harmless duplication — name them; that identifies the
-  conversation to have.
