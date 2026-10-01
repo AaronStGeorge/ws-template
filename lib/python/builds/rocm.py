@@ -142,7 +142,6 @@ def _build_pinned_tarball(knobs: PinnedTarballKnobs) -> RocmInstallResult:
     """
     src = resolve_source_dir(knobs)
     out = build_dir(src)
-    out.mkdir(parents=True, exist_ok=True)
 
     log_parts: list[str] = []
     rocm_path: Path | None = None

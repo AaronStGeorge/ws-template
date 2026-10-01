@@ -1,0 +1,12 @@
+{
+  "repos": [
+    {
+      "url": "git@github.com:AMD-Ecosystem/llama.cpp.git",
+      "ref": "hrx-graph-develop-v2"
+    },
+    {
+      "url": "git@github.com:ROCm/hrx-system.git",
+      "ref": "40b7cc13717d9d4c7f7eb0e6885563042153566b"
+    }
+  ]
+}

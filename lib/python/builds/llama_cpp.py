@@ -2,14 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import shutil
+import subprocess
 
 from buildlib import BuildKnobs, BuildResult, build_dir, resolve_source_dir
-from builds.hrx_system import (
-    HrxSystemBuildResult,
-    _already_configured,
-    _run,
-    _write_configure_marker,
-)
 from builds.rocm import RocmInstallResult
 
 PROJECT = "llama-cpp"
@@ -20,12 +16,11 @@ class LlamaCppKnobs(BuildKnobs):
     """Knobs for building the llama.cpp fork's HRX backend and its ``.envrc``.
 
     ``source_dir`` (required by :class:`BuildKnobs`) is the llama.cpp checkout.
-    The HRX backend is consumed as an *installed* dist -- ``find_package(hrx)`` /
-    ``find_package(loomc)`` against the install tree of an upstream
-    :class:`~builds.hrx_system.HrxSystemBuildResult` -- so this build carries no
-    HRX source knob. The ROCm/LLVM toolchain likewise arrives as an upstream
-    :class:`~builds.rocm.RocmInstallResult`, not as a knob.
+    ``hrx_source_dir`` supplies HRX to llama.cpp's CMake dependency build. The
+    ROCm toolchain arrives as a :class:`~builds.rocm.RocmInstallResult`.
     """
+
+    hrx_source_dir: str
 
     # --- build knobs ---
     build_type: str = "RelWithDebInfo"
@@ -50,7 +45,7 @@ class LlamaCppBuildResult(BuildResult):
     configure_exit_code: int
     build_exit_code: int | None
     envrc_path: Path | None
-    hrx_install_path: Path | None
+    hrx_build_path: Path | None
     rocm_path: Path | None
     log: str = ""
 
@@ -65,46 +60,36 @@ class LlamaCppBuildResult(BuildResult):
         return self.envrc_path is not None
 
 
-def build(
-    knobs: LlamaCppKnobs, rocm: RocmInstallResult, hrx: HrxSystemBuildResult
-) -> LlamaCppBuildResult:
-    """Configure + build llama.cpp with GGML_HRX, then write its ``.envrc``.
+def build(knobs: LlamaCppKnobs, rocm: RocmInstallResult) -> LlamaCppBuildResult:
+    """Build llama.cpp and its HRX dependency, then write runtime paths.
 
-    The HRX backend resolves ``hrx`` and ``loomc`` as installed CMake packages
-    (the HrxPublicDist and Loom tool components installed by
-    :mod:`builds.hrx_system`), pinned in via ``CMAKE_PREFIX_PATH``; the ROCm
-    toolchain is pinned through absolute compiler paths, mirroring
-    :func:`builds.hrx_system._configure_argv`. Nothing in the configure needs the
-    ``.envrc`` sourced (the kernel-corpus generator is stdlib-only Python), so the
-    ``.envrc`` -- runtime-only wiring: ROCm SDK paths, the hrx install's shared
-    libs, and an optional GPU pin -- is written after a successful build. Configure
-    is skipped when ``<build>`` already holds a cache configured with an identical
-    command line (recorded in a marker).
+    Configure runs on every invocation so upstream's HRX ancestry check observes
+    checkout changes. CMake retains incremental compilation for both projects.
+    Upstream CMake owns HRX compilation targets; no install stage is needed.
     """
     if rocm.rocm_path is None:
         raise ValueError(
             "llama_cpp.build requires an installed ROCm SDK; rocm_path is None"
         )
-    if not hrx.installed or hrx.install_path is None:
-        raise ValueError(
-            "llama_cpp.build requires an installed HRX dist; hrx.install_path is None "
-            "or the install failed"
-        )
     src = resolve_source_dir(knobs)
     out = build_dir(src)
     out.mkdir(parents=True, exist_ok=True)
     rocm_root = Path(rocm.rocm_path).expanduser().resolve()
-    hrx_install = Path(hrx.install_path).expanduser().resolve()
+    hrx_source = Path(knobs.hrx_source_dir).expanduser().resolve()
+    hrx_prefix = out / "ggml/src/ggml-hrx/hrx"
+    hrx_build = hrx_prefix / "src/ggml-hrx-deps-build"
 
     log_parts: list[str] = []
-    configure_argv = _configure_argv(src, out, rocm_root, hrx_install, knobs)
-    if _already_configured(out, configure_argv):
-        log_parts.append(f"== Skipping configure: {out} already configured")
-        configure_rc = 0
-    else:
-        configure_rc = _run(configure_argv, log_parts)
-        if configure_rc == 0:
-            _write_configure_marker(out, configure_argv)
+    configure_argv = _configure_argv(src, out, rocm_root, hrx_source, knobs)
+    # CMake's automatic reset after a compiler change discards other -D options,
+    # including GGML_HRX. Reset first so this invocation's options survive.
+    if _compiler_changed(out, rocm_root):
+        configure_argv.append("--fresh")
+    # Reset the dependency together with its ExternalProject stamps so upstream
+    # reruns configuration with the complete option set and new toolchain.
+    if _compiler_changed(hrx_build, rocm_root):
+        shutil.rmtree(hrx_prefix)
+    configure_rc = _run(configure_argv, log_parts)
 
     build_rc: int | None = None
     envrc_path: Path | None = None
@@ -116,11 +101,13 @@ def build(
 
         if build_rc == 0:
             envrc = src / ".envrc"
-            if envrc.exists() and not knobs.overwrite:
+            envrc_exists = envrc.exists()
+            preserve_envrc = envrc_exists and not knobs.overwrite
+            if preserve_envrc:
                 log_parts.append(f"!! {envrc} exists and overwrite=False; not written")
             else:
                 envrc.write_text(
-                    _render_envrc(rocm_root, hrx_install, knobs), encoding="utf-8"
+                    _render_envrc(rocm_root, hrx_build, knobs), encoding="utf-8"
                 )
                 envrc_path = envrc
                 log_parts.append(f"== Wrote {envrc} (ROCM_PATH={rocm_root})")
@@ -133,24 +120,44 @@ def build(
         configure_exit_code=configure_rc,
         build_exit_code=build_rc,
         envrc_path=envrc_path,
-        hrx_install_path=hrx_install,
+        hrx_build_path=hrx_build,
         rocm_path=rocm_root,
         log="\n".join(log_parts),
     )
 
 
-def _configure_argv(
-    src: Path, out: Path, rocm: Path, hrx_install: Path, knobs: LlamaCppKnobs
-) -> list[str]:
-    """Build the llama.cpp ``cmake`` configure command line.
+def _run(argv: list[str], log_parts: list[str]) -> int:
+    completed = subprocess.run(argv, capture_output=True, text=True)
+    log_parts.append(
+        f"$ {' '.join(argv)}\n[exit {completed.returncode}]\n"
+        f"{completed.stdout}{completed.stderr}"
+    )
+    return completed.returncode
 
-    Mirrors :func:`builds.hrx_system._configure_argv`'s toolchain pinning (ROCm
-    clang/llvm + lld), adapted to the llama.cpp entry point: ``GGML_HRX=ON``
-    selects the HRX ggml backend and ``CMAKE_PREFIX_PATH`` points its
-    ``find_package(hrx)`` / ``find_package(loomc)`` at the installed dist. No
-    AMDGPU target list is passed -- the fork compiles no device code itself; the
-    gfx targets are baked into the hrx dist by the upstream build.
-    """
+
+def _compiler_changed(out: Path, rocm: Path) -> bool:
+    cache = out / "CMakeCache.txt"
+    if not cache.exists():
+        return False
+    compilers = {
+        "CMAKE_C_COMPILER": str(rocm / "lib/llvm/bin/clang"),
+        "CMAKE_CXX_COMPILER": str(rocm / "lib/llvm/bin/clang++"),
+    }
+    for line in cache.read_text(encoding="utf-8").splitlines():
+        key, _, value = line.partition("=")
+        expected = compilers.get(key.partition(":")[0])
+        is_compiler = expected is not None
+        path_changed = value != expected
+        compiler_changed = is_compiler and path_changed
+        if compiler_changed:
+            return True
+    return False
+
+
+def _configure_argv(
+    src: Path, out: Path, rocm: Path, hrx_source: Path, knobs: LlamaCppKnobs
+) -> list[str]:
+    """Pin the ROCm toolchain and pass HRX sources to upstream CMake."""
     llvm_bin = rocm / "lib" / "llvm" / "bin"
     return [
         "cmake",
@@ -167,7 +174,8 @@ def _configure_argv(
         f"-DCMAKE_BUILD_TYPE={knobs.build_type}",
         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
         "-DGGML_HRX=ON",
-        f"-DCMAKE_PREFIX_PATH={hrx_install}",
+        f"-DHRX_SOURCE_DIR={hrx_source}",
+        f"-DIREE_ROCM_PATH={rocm}",
     ]
 
 
@@ -186,13 +194,13 @@ path_prepend() {
 }"""
 
 
-def _render_envrc(rocm_path: Path, hrx_install: Path, knobs: LlamaCppKnobs) -> str:
+def _render_envrc(rocm_path: Path, hrx_build: Path, knobs: LlamaCppKnobs) -> str:
     header = (
         "# Generated by builds.llama_cpp -- do not edit by hand.\n"
-        "# Regenerate via build.py at the workspace root.\n"
+        "# Regenerate via sources/build.py at the workspace root.\n"
         "#\n"
         "# Wires the runtime environment for the llama.cpp HRX build: the ROCm SDK\n"
-        "# on PATH/LD_LIBRARY_PATH and the installed hrx dist's shared libs\n"
+        "# on PATH/LD_LIBRARY_PATH and the integrated HRX build's shared libs\n"
         "# (libhrx/libloomc) on LD_LIBRARY_PATH. No venv is managed here -- the\n"
         "# build needs no Python deps."
     )
@@ -218,8 +226,9 @@ def _render_envrc(rocm_path: Path, hrx_install: Path, knobs: LlamaCppKnobs) -> s
         )
 
     hrx_block = (
-        "# --- installed hrx dist (libhrx / libloomc shared libs) ---\n"
-        f'path_prepend LD_LIBRARY_PATH "{hrx_install / "lib"}"'
+        "# --- integrated HRX build (libhrx / libloomc shared libs) ---\n"
+        f'path_prepend LD_LIBRARY_PATH "{hrx_build / "libhrx/src/libhrx"}"\n'
+        f'path_prepend LD_LIBRARY_PATH "{hrx_build / "loom/binding/c"}"'
     )
 
     watch_block = (
