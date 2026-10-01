@@ -12,3 +12,6 @@ build/
 # imp tool state and build
 build/
 .imp/
+
+# Local issue tracker state
+.beads/
