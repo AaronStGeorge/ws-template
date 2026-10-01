@@ -1,91 +1,20 @@
 #!/usr/bin/env python3
-"""Imp: drive a failing ggml-staging-automation bump PR to green CI.
+"""Repair a bump PR in an isolated clone, then verify its CI verdict.
 
-Launched by its paired Sensor, the sensor.py beside this file; the
-loop's README (`../README.md`, one directory above this file's), section
-`fix-llama-bump`, is the authoritative boundary, and its section `When
-this loop needs a human` is the loop's judgment. Argv carries the bump
-PR URL — the whole input; everything else is derived from live GitHub
-state (no ticket, no standing context document). Exit 0 means the bump
-PR is green; diagnostics go to stderr for the Run's log.
+The paired sensor.py supplies the bump PR URL. ../README.md defines the
+loop's boundaries and its "When this loop needs a human" judgment, which
+the overseer reads through this header.
 
-Upstream fixes are consumed, never re-derived — but the check is scoped:
-the bump already pins llama.cpp at upstream's head as of bump time, so
-fixes merged BEFORE that pin are simply in the tree (no step, no proof
-needed), and only a fix merged AFTER the pin is consumed explicitly, by a
-llama.cpp pin bump. The staircase never moves the hrx-system pin alone —
-each step pairs a llama.cpp fix with the break it answers so every pushed
-head is a green llama.cpp bump (a first supervised run pushed a lone
-hrx-system walk-back and was stopped for it). The imp is
-self-contained in this directory: it clones ROCm/ggml-staging-automation
-directly from GitHub and copies the project's shared ``build.py`` into the
-run workspace — local validation is minutes where a CI round is ~an hour —
-with no dependency on any checkout under sources/.
+This wrapper prepares the agent's workspace and enforces the handoff order:
+log the report, sync the PR body, arm any upstream-merge wait, then check CI.
+STANDING_INSTRUCTIONS owns the repair procedure; the wrapper does not infer
+success from the agent's report. Preparation rationale lives beside the
+relevant operations below.
 
-Mined from the hand-launched spike (``scripts/pipelines/fix-llama-bump.py``,
-hyphenated): the spike's prep steps and standing instructions are the
-paid-for part and carry over nearly verbatim; its ticket plumbing and
-structured-result write-back do not — under the Imp Process Contract
-the outcome is the exit code and the narrative is stderr.
-
-Names: the slug that titles the /tmp workspace and prefixes the numbered
-llama.cpp fork branches is ``fix-bump-pr-<N>`` — deliberately identical
-to the Run Id convention sensor.py emits, so fork branches
-(``fix-bump-pr-46-1``, …) trace to their Run without this process ever
-being told its Run Id.
-
-impd gotchas: Imp stdout is discarded and stderr is captured as the
-Run's log, so codex's stdout is redirected onto stderr and every wrapper
-print goes there too — nothing meaningful may touch stdout. The Daemon is
-per-workspace and runs from the workspace root, so this process inherits
-that cwd — which is exactly what ``impctl watch`` needs (it finds the
-Daemon's socket through cwd); the workspace root is still derived from
-this file's own location for the symlink prep, never assumed. ``impctl``
-is invoked bare and expected on PATH (the workspace ``.envrc`` puts
-``build/bin`` there) to arm the reconcile watch as a one-shot Watch.
-
-After the agent exits, the wrapper — not the agent — decides the Run: it
-arms the reconcile watch iff the schema-forced handoff names an upstream
-PR (armed *before* the green check, so a stuck run that opened an
-upstream PR still arms), then verifies green mechanically — ``gh pr
-checks`` exits 0 iff every check passed, and that, never the agent's
-self-report, becomes the exit code.
-
-Prep performed before codex starts, and why (spike-proven):
-
-- Precondition: ``codex login status`` must pass. codex can go weeks
-  between uses here and its ChatGPT login can lapse in between; failing
-  before any clone makes the Run's log say exactly that, instead of a
-  codex startup error buried after the prep. A failed Run needs attention
-  — here ``codex login``, then relaunch under a fresh Run Id.
-- The staging work branch is the PR's ``headRefName`` via ``gh`` — a
-  property of the PR, never imp config.
-- Only ggml-staging-automation is cloned — directly from GitHub — and the
-  wrapper, not the agent, initializes submodules, because the next two
-  steps need the llama.cpp checkout.
-- llama.cpp's upstream ``AGENTS.md`` is deleted: codex auto-ingests any
-  AGENTS.md, and upstream's contributor-policy text stalled a prior run
-  (agent refused to push). The deletion is marked ``skip-worktree`` so the
-  agent's add-all commits cannot sweep it into fork branches. The
-  workspace root keeps its own AGENTS.md symlink — that one is wanted.
-- llama.cpp's origin *push* URL is overridden to the personal fork, making
-  the fork-only rule mechanical for the default ``git push origin`` path —
-  prose alone proved unreliable. This guards the accident, not a
-  determined agent; proportionate for this experiment.
-- hrx-system's origin *push* URL is overridden to a non-URL, for the same
-  reason: the imp never changes hrx-system (only its pin moves, inside
-  the staircase), and a break that needs an hrx-system change ends the
-  Run with the problem in the handoff instead of a workaround.
-- ``sync_pr_body.py`` copy (shared by both bump imps, one level up): the bump
-  PR's body names a llama.cpp pin the staircase moves; the agent runs
-  this after every push to the PR branch
-  to keep the body truthful, and the wrapper runs it once more after the
-  handoff as the backstop.
-- ``.venv`` symlink + ``build.py`` copy: local validation is minutes where
-  a CI round is ~an hour, so the iterate loop leans on it. Shared-venv
-  pip-leak trade accepted as before.
-- The run workspace is not itself a git repo, so codex needs
-  ``--skip-git-repo-check``.
+The clone uses GitHub state, independent of sources/. Repository-relative
+paths locate shared tools and workspace configuration; the Daemon's inherited
+cwd lets bare impctl find its socket. The temporary workspace is not a Git
+repository, which is why codex receives --skip-git-repo-check.
 """
 
 import argparse
@@ -114,8 +43,7 @@ HRX_PUSH_URL = "hrx-system-is-never-pushed"
 # checkout of the staging repo.
 STAGING_REPO_URL = "git@github.com:ROCm/ggml-staging-automation.git"
 
-# The spike's schema plus `upstream_pr`: the one machine-read field of the
-# handoff — non-null is what arms the reconcile watch after the agent exits.
+# upstream_pr is the handoff field that arms the reconcile Watch when non-null.
 HANDOFF_SCHEMA = {
     "type": "object",
     "properties": {
@@ -139,14 +67,6 @@ HANDOFF_SCHEMA = {
     "additionalProperties": False,
 }
 
-# The spike's standing instructions, carried over with four deltas: the
-# prompt opens with the job directly (there is no ticket request any more),
-# "check upstream first" leads the working rules, the handoff
-# additionally reports the upstream PR URL, and the manifest-expectations
-# rule is new. Everything else — green staircase, push rules, numbered
-# fork branches, upstream-PR creation, pre-authorization, no-round-limit
-# iterate, build.py-first — is the spike's proven text.
-#
 # The manifest-expectations rule answers fix-bump-pr-82: CI was red on
 # perplexity XPASSes, and the Run dropped the stale `fail` expectations
 # but left their paired lemonade-benchmark `skip`s, so the PR went green
@@ -162,6 +82,21 @@ request beyond this prompt — diagnose from the PR itself: `gh pr checks`,
 
 Working rules:
 
+- HRX compatibility floor: llama.cpp's
+  `ggml/src/ggml-hrx/hrx-minimum-commit.txt` records its required HRX ancestry.
+  When a fix needs newer HRX APIs, Loom syntax, or numerical behavior (including
+  removing a workaround after an HRX fix), raise the floor in that same llama.cpp
+  commit. Choose the earliest demonstrated required HRX commit that descends
+  from the previous floor; do not bump it for unrelated changes or merely to the
+  latest tested HEAD. Record the required HRX commit or PR and why it is needed.
+  Before validating every staircase step, run
+  `python3 llama.cpp/ggml/src/ggml-hrx/tools/check_hrx_revision.py hrx-system`
+  from the staging checkout. Staging uses installed packages and bypasses the
+  HRX_SOURCE_DIR CMake gate: establish that the tested HRX and Loom libraries
+  were built from the checked revision. Never lower the floor to fit a step;
+  if the floor cannot be met within the staircase rules, stop and hand off.
+  Historical llama.cpp revisions without the file have no recorded floor;
+  introduce it with the required commit when a repair adds an HRX dependency.
 - What is already fixed: the automation's bump pins llama.cpp at the
   upstream (AMD-Ecosystem `hrx-graph-develop-v2`) head as of bump time. A
   break whose fix merged upstream BEFORE that pin is already handled —
@@ -297,9 +232,7 @@ def run_to_log(argv, **kwargs):
 
 
 def main():
-    # argv is the provenance boundary: the Daemon relays the Launch's
-    # arguments verbatim, and humans launch by hand too — so the one
-    # argument is pattern-checked here and trusted everywhere downstream.
+    # Direct human launches can supply URLs outside the staging repository.
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "pr_url", help="the ggml-staging-automation bump PR URL"
@@ -313,9 +246,8 @@ def main():
         )
     pr_url = url_match.group(0)
 
-    # Precondition, before anything is cloned: a codex binary missing from
-    # PATH is the same verdict as a stale login — codex exec would die the
-    # same way. The header's prep bullets carry the why.
+    # Check login before cloning so a lapse is the visible failure, rather
+    # than a startup error buried after workspace preparation.
     try:
         codex_is_usable = subprocess.run(
             ["codex", "login", "status"],
@@ -366,9 +298,9 @@ def main():
         ["git", "submodule", "update", "--init"], cwd=clone, check=True
     )
 
-    # Neutralize upstream's AGENTS.md and force llama.cpp pushes to the
-    # personal fork — both spike-proven guards; the header's prep bullets
-    # carry the full why.
+    # Upstream contributor instructions stalled an earlier repair. Remove
+    # them locally; skip-worktree keeps add-all commits from publishing the
+    # deletion. The workspace's own AGENTS.md remains available below.
     llama = clone / "llama.cpp"
     (llama / "AGENTS.md").unlink()
     run_to_log(
@@ -376,6 +308,8 @@ def main():
         cwd=llama,
         check=True,
     )
+    # Guard default origin pushes mechanically: prose alone proved unreliable.
+    # An explicitly chosen remote can still bypass this accident guard.
     run_to_log(
         ["git", "remote", "set-url", "--push", "origin", FORK_PUSH_URL],
         cwd=llama,
@@ -399,6 +333,9 @@ def main():
     (wsdir / "docs").symlink_to(ws / "docs", target_is_directory=True)
     (wsdir / "AGENTS.md").symlink_to(ws / "AGENTS.md")
     (wsdir / "CLAUDE.md").symlink_to(ws / "AGENTS.md")
+    # Reuse the environment for fast local validation; package installs in
+    # the Run can therefore affect the shared venv. This isolation tradeoff
+    # is accepted.
     (wsdir / ".venv").symlink_to(ws / ".venv", target_is_directory=True)
     shutil.copy2(project / "build.py", wsdir / "build.py")
     shutil.copy2(here.parent / "sync_pr_body.py", wsdir / "sync_pr_body.py")
@@ -431,9 +368,7 @@ def main():
         check=True,
     )
 
-    # The handoff's home is the Run log now — the spike wrote it onto the
-    # ticket, and tickets are retired; richer artifacts live in the domain
-    # (PR bodies) per the shed structured-result channel.
+    # The overseer follows the upstream PR and Watch from this logged handoff.
     handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
     print(json.dumps(handoff, indent=2), file=sys.stderr)
 

@@ -2,11 +2,9 @@
 
 Everything imp in this workspace that acts on
 [ROCm/ggml-staging-automation](https://github.com/ROCm/ggml-staging-automation)
-lives here, laid out as [scripts/imps/README.md](../README.md) describes:
-[loops/](loops/) holds one directory per loop, each standalone Imp has a
-directory beside it, and [build.py](build.py) is the build driver every
-Imp here copies into its run workspace. Bring the project up with both
-Manifests:
+lives here. [scripts/imps/README.md](../README.md) describes the layout, and
+[build.py](build.py) supplies the shared build driver for repair workspaces.
+Bring the project up with both Manifests:
 
 ```sh
 impctl up --manifest scripts/imps/ggml-staging-automation/loops/bump-automation/bump-loop.json \
@@ -48,6 +46,13 @@ workspace GPU/style instructions are available in the isolated workspace.
 Any repair branch is pushed only to `AaronStGeorge/llama.cpp`. The agent does
 not create a PR, edit HRX, or push automation/HRX changes. Diagnosis without a
 fix is a valid result; there is no prescribed CI batch or independent verifier.
+
+The initial reproduction keeps the failing run's dependency pins. Repairs
+that depend on newer HRX behavior must raise llama.cpp's minimum HRX revision
+and establish the tested libraries' provenance. Missing history or incompatible
+pins require a handoff rather than a silent dependency change. The exact
+ancestry and validation procedure lives in the Imp's
+[repair instructions](fix-llama-perplexity/imp.py).
 
 The workspace retains `source-run.json`, `prompt.txt`, and `handoff.md`.
 The Markdown handoff contains reproduction results, root-cause analysis,

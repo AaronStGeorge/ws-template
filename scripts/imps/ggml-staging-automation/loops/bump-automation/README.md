@@ -15,7 +15,7 @@ The workspace's [overseer](../../../overseer/imp.py) checks the newest
 human when one is needed. `sync_pr_body.py` keeps the bump PR's
 description truthful while the bump Imps move its llama.cpp pin. The
 project's shared [build.py](../../build.py) provides local build
-infrastructure for the fix Imp. All of them clone
+infrastructure for the fix Imp. The two bump Imps clone
 `ROCm/ggml-staging-automation` from GitHub and depend on no checkout under
 `sources/`.
 
@@ -52,27 +52,29 @@ commit pairs a llama.cpp fix with the hrx-system break it answers, and the
 last pins hrx-system at the bump's original target. The hrx-system pin is
 never committed alone, because a lone pin move shows nothing; the common
 single-missing-fix case is one llama.cpp bump commit with hrx-system
-untouched. hrx-system itself is never edited or pushed, and mechanically
-so: its checkout's push URL is set to something that is not a URL, the
-same way llama.cpp's push URL is pinned to the personal fork.
+untouched. The agent is instructed never to edit or push hrx-system itself;
+the wrapper also blocks its default origin push. The push guards and their
+limits are documented beside the setup in [imp.py](fix-llama-bump/imp.py).
+
+Each repair requiring newer HRX behavior raises llama.cpp's minimum HRX
+revision, and every staircase step must satisfy that floor with known library
+provenance. If it cannot, the Run hands off the problem. The exact repair and
+validation procedure lives in [STANDING_INSTRUCTIONS](fix-llama-bump/imp.py).
 
 Upstream fixes are consumed, never re-derived: a fix merged before the
 bump's llama.cpp pin is already in the tree, one merged after it is
 consumed by a plain pin bump, and only what upstream lacks entirely is
 derived here.
 
-When a bump makes a model's perplexity pass where the staging manifest
-(`benchmarks/hrx/model_manifest.json`) expected a failure, the Run removes
-that `"perplexity": "fail"` and its paired `"lemonade-benchmark": "skip"`
-together, so the model is benchmarked again. Green CI cannot enforce this,
-because a skipped check never fails; the Imp's standing instructions do.
+Recovered models resume benchmarking as well as passing perplexity. Green
+CI alone cannot enforce this because a skipped benchmark cannot fail; the
+agent's repair instructions require both manifest expectations to be updated.
 
 If and only if the repair needed a llama.cpp change upstream still lacks,
 the Run pushes it to the personal fork on numbered branches
 (`fix-bump-pr-<N>-1`, ...), retargets the bump PR's `.gitmodules` at the
 fork so the fix is validated in the PR's own CI, opens the upstream PR
-from a fixed template (Motivation, a table of breaking hrx-system PRs to
-fix commits, Testing with the validated hashes and run link), and arms the
+with the repair motivation and validation evidence, and arms the
 reconcile Watch before the green check, so a stuck Run that opened an
 upstream PR still leaves the days-long wait armed:
 
@@ -85,10 +87,10 @@ weeks between uses and its login lapses; the Run fails with a log line
 saying so, and the human runs `codex login` and relaunches under a fresh
 Run Id.
 
-The run workspace under `/tmp` and the fork branches are named
-`fix-bump-pr-<N>`, identical to the Run Id, so everything a Run made traces
-back to it without the Imp being told its Id. The rest of the
-run-workspace prep, and why each step exists, is the Imp's header.
+The temporary workspace and numbered fork branches share the prefix
+`fix-bump-pr-<N>`, matching the automatic Run Id. Preparation details and their
+rationale are in [imp.py](fix-llama-bump/imp.py). A manual Run Id may differ
+from this PR-derived prefix.
 
 ## `repoint-llama-bump`
 
@@ -102,25 +104,21 @@ preference. A bump PR that MERGED while still pointed at the fork lands
 here too and is a human matter; the log line is this Run's whole
 contribution to it.
 
-Otherwise it repoints mechanically, with no agent and no submodule
-checkout: `.gitmodules` back to the canonical coordinates
+Otherwise it restores `.gitmodules` to the canonical coordinates
 (`https://github.com/AMD-Ecosystem/llama.cpp.git`, branch
 `hrx-graph-develop-v2`) and the pin moved to the upstream PR's merge
-commit as an index entry, since a submodule pin is an ordinary tree entry.
+commit.
 It lands as one commit (`Repoint llama.cpp at merged upstream`) pushed to
 the PR's head branch, hrx-system untouched.
 
 Then CI decides. The Run waits until the PR's head is the pushed commit
-and its check rollup is non-empty, because a watch started earlier returns
-the previous head's stale green within seconds (it happened); that wait
-failing after ten minutes is a failed Run, never a guessed green. It then
+and its check rollup is non-empty; failure to observe this within ten minutes
+fails the Run. It then
 syncs the PR body from the pushed sha and runs `gh pr checks --watch`,
-whose exit code is the Run's. Green is expected, since the same change was
-validated on this PR via the fork; that expectation is why there are no
-retry semantics.
+whose exit code determines success. There is no automatic retry.
 
 Red launches codex for a diagnosis only, under an explicit change-nothing
-rule, schema-forced to `{"diagnosis": <string>}`; the diagnosis is printed
+rule; the diagnosis is printed
 to the Run log and the Run exits nonzero so it is flagged as needing
 attention. The run workspace is named after the Run Id, as in the fix Imp.
 
@@ -134,8 +132,9 @@ Manifest with no arguments. Each Tick it lists open PRs in
 `ROCm/ggml-staging-automation` whose head is the automation's bump branch
 (`users/automation/bump-submodules`) and emits one Launch per PR whose
 check rollup holds a FAILURE; a rollup still churning is "not yet". The Run
-Id derives from the PR number alone, so a bump PR gets one automatic fix,
-ever: a PR red again after its fix is a silently rejected duplicate, and
+Id derives from the PR number alone, so a bump PR gets one automatic fix
+while the Daemon retains that Id: a PR red again after its fix is a rejected
+duplicate, and
 [When this loop needs a human](#when-this-loop-needs-a-human) names that
 case.
 
@@ -202,14 +201,16 @@ The loop does not need a human when:
 
 ## `sync_pr_body.py`
 
-The bump PR's body carries a submodule table whose llama.cpp row names a
-pin the loop moves under it. It re-derives that row (repo link,
-branch, "To" cell) from the PR head; the hrx-system row is never touched,
-because the loop never moves that pin.
+Run `sync_pr_body.py <bump-pr-url> [--head <sha>] [--dry-run]` to refresh the
+llama.cpp row's repository link, branch, and "To" pin from GitHub. The bot's
+"From" cell and all other rows are preserved. In particular, this helper does
+not refresh hrx-system during intermediate staircase steps; the final repair
+must restore the original target.
 
-Callers that just pushed pass `--head <sha>`, because the PR API can
-report the previous head for a while after a push and a sync trusting it
-writes the state the branch just left (it happened); the contents API at
-an explicit sha has no such lag. A body already in sync is left alone, a
-body without the bot's row is left untouched with a warning, and the exit
-code is nonzero only when `gh` itself fails.
+Callers that just pushed supply `--head <sha>` to avoid reading an outdated
+PR head. `--dry-run` prints the proposed body to stderr without editing the PR.
+An unchanged body needs no edit; an unrecognized row produces a warning and
+leaves the body intact. Invalid URLs and GitHub command failures exit nonzero;
+unexpected response or parsing errors can also fail. Diagnostics use stderr.
+The [implementation header](sync_pr_body.py) explains the stale-head failure
+that motivates explicit commit selection.

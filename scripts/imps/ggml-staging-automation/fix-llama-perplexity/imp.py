@@ -51,6 +51,23 @@ Do not edit HRX. You may create and push a new llama.cpp fix branch only to
 {fork_url}; origin's push URL is configured there. Do not force-push, push
 other repositories, or create a PR.
 
+Maintain llama.cpp's ggml/src/ggml-hrx/hrx-minimum-commit.txt when the repair
+requires newer HRX APIs, Loom syntax, or numerical behavior, including removal
+of a workaround after an HRX fix. Raise the floor in the same llama.cpp commit
+to the earliest demonstrated required HRX commit that descends from the previous
+floor. Do not bump it for unrelated repairs or merely to the latest tested HEAD.
+Record the dependency and its HRX commit or PR in the handoff.
+
+After the initial reproduction at the run's original pins, verify the selected
+HRX revision with
+`python3 ggml-staging-automation/llama.cpp/ggml/src/ggml-hrx/tools/check_hrx_revision.py ggml-staging-automation/hrx-system`
+before validating a repair. Staging uses installed packages and bypasses the
+HRX_SOURCE_DIR CMake check, so also establish that the tested HRX and Loom
+libraries were built from that revision. Missing history or incompatible pins
+require a handoff, not a silent dependency change. Historical llama.cpp revisions
+without a minimum file have no recorded floor; if a repair adds an HRX dependency,
+introduce the file with that required commit in the same repair.
+
 Your final response must be a Markdown handoff report: reproduction results,
 root-cause analysis, any fix and validation with evidence locations, remaining
 uncertainty, and the optional pushed llama.cpp branch URL. A diagnosis without
