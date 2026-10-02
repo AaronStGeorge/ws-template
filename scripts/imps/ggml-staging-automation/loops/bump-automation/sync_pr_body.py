@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Refresh the llama.cpp row after the bump loop changes its pin or remote.
+"""Refresh llama.cpp's pin and links in the bump PR description.
 
 Both Imp wrappers invoke this executable, and the repair agent calls it after
 pushes. README.md documents invocation and outcomes. Keeping
@@ -8,9 +8,13 @@ it executable also lets the agent use the same operation as the wrappers.
 The row is derived from the contents API and .gitmodules at one commit. A
 caller that just pushed must supply --head: PR 57 once overwrote a canonical
 row with stale fork coordinates because the PR API still reported its old
-head. Only the llama.cpp row is owned here; hrx-system and the bot's "From"
-cell are preserved. An unrecognized table is left intact so template drift
-cannot silently damage the rest of the PR description.
+head. Only llama.cpp's repository, branch, and "To" pin are refreshed;
+hrx-system and both "From" pins retain their values and link destinations.
+
+The staging workflow owns the initial template. Reference links and branch
+names outside the table keep rows below GitHub's observed 72-column squash
+wrapping. The synchronizer updates only llama.cpp's To label, branch line,
+and repository/To link definitions. Everything else is left verbatim.
 """
 
 import argparse
@@ -23,15 +27,6 @@ import sys
 BUMP_PR_URL = re.compile(
     r"https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<number>\d+)"
 )
-
-# The bot's llama.cpp row: link cell, branch cell, From cell, To cell. Only
-# the From cell is kept verbatim; the other three are regenerated.
-LLAMA_ROW = re.compile(
-    r"^\| \[`llama\.cpp`\]\([^)]*\) \| (?P<branch>[^|]*) \| "
-    r"(?P<from_cell>[^|]*) \| (?P<to_cell>[^|]*) \|[ \t]*$",
-    re.MULTILINE,
-)
-
 
 def gh_json(argv):
     """Run a gh command whose stdout is JSON, stderr flowing to the log."""
@@ -81,17 +76,66 @@ def read_head_state(owner, repo, pr_url, head_sha):
     }
 
 
-def rewrite_row(body, state):
-    """Overwrite the llama.cpp row's regenerated cells; None if no row."""
-    match = LLAMA_ROW.search(body)
-    if match is None:
-        return None
-    pin_link = f"[`{state['pin'][:12]}`]({state['repo_web_url']}/commit/{state['pin']})"
-    row = (
-        f"| [`llama.cpp`]({state['repo_web_url']}) | `{state['branch']}` | "
-        f"{match.group('from_cell')} | {pin_link} |"
+def rewrite_body(body, state):
+    r"""Replace the four llama.cpp fields; None if any is missing or repeated.
+
+    The producer is ROCm/ggml-staging-automation's
+    .github/workflows/bump_submodules.yml, in the Create pull request step's
+    `body`. Its relevant Markdown looks like this (HRX entries omitted):
+
+        | Submodule | From | To |
+        | --- | --- | --- |
+        | [llama.cpp][l] | [`2ba2ddc76a8a`][l0] | [`3cbd76abae6e`][l1] |
+
+        Tracked branches:
+        - llama.cpp: `hrx-graph-develop-v2`
+
+        [l]:
+          <repository-url>
+        [l0]:
+          <from-repository-url>/commit/<full-from-sha>
+        [l1]:
+          <repository-url>/commit/<full-to-sha>
+
+    `l` names the repository, `l0` the From commit, and `l1` the To commit.
+    The four patterns below match, in order:
+    1. A backtick-wrapped label followed by [l1], replaced with pin[:12].
+    2. The line starting '- llama.cpp: ', replaced with the tracked branch.
+    3. The [l]: definition and its indented URL, replaced with repo_web_url.
+    4. The [l1]: definition and its indented URL, replaced with the full
+       commit URL built from repo_web_url and pin.
+
+    MULTILINE makes ^ mean the start of each line. \r?\n accepts LF or CRLF;
+    [ \t]+ requires indentation before a definition's URL. Negated character
+    classes stop at line endings (and, for the hash label, at a backtick).
+    These are independent matches, not a parser for the surrounding table.
+    From links, HRX entries, and all other text remain untouched.
+
+    Each pattern must match exactly once. Otherwise main leaves the original
+    PR body intact instead of publishing a partial or ambiguous update. The
+    replacement lambda inserts state values literally, without interpreting
+    backslashes as regex replacement escapes.
+
+    If the producer's format changes, update this example and the affected
+    patterns together. Inspect the raw PR body with `gh pr view <url> --json
+    body`, then run this script with `<url> --dry-run` to review the result.
+    """
+    replacements = (
+        (r"\[`[^`\r\n]+`\]\[l1\]", f"[`{state['pin'][:12]}`][l1]"),
+        (r"^- llama\.cpp: [^\r\n]*", f"- llama.cpp: `{state['branch']}`"),
+        (r"^\[l\]:\r?\n[ \t]+[^\r\n]+", f"[l]:\n  {state['repo_web_url']}"),
+        (
+            r"^\[l1\]:\r?\n[ \t]+[^\r\n]+",
+            f"[l1]:\n  {state['repo_web_url']}/commit/{state['pin']}",
+        ),
     )
-    return body[: match.start()] + row + body[match.end():]
+    for pattern, replacement in replacements:
+        body, count = re.subn(
+            pattern, lambda match: replacement, body, flags=re.MULTILINE
+        )
+        if count != 1:
+            return None
+    return body
 
 
 def main():
@@ -122,12 +166,11 @@ def main():
         file=sys.stderr,
     )
 
-    body = rewrite_row(state["body"], state)
-    row_was_found = body is not None
-    if not row_was_found:
+    body = rewrite_body(state["body"], state)
+    fields_were_found = body is not None
+    if not fields_were_found:
         print(
-            "warning: no llama.cpp row found in the PR body; leaving it "
-            "untouched",
+            "warning: missing or repeated llama.cpp fields; leaving PR body untouched",
             file=sys.stderr,
         )
         return

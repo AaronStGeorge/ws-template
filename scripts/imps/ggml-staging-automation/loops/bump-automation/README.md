@@ -202,16 +202,20 @@ The loop does not need a human when:
 
 ## `sync_pr_body.py`
 
-Run `sync_pr_body.py <bump-pr-url> [--head <sha>] [--dry-run]` to refresh the
-llama.cpp row's repository link, branch, and "To" pin from GitHub. The bot's
-"From" cell and all other rows are preserved. In particular, this helper does
-not refresh hrx-system during intermediate staircase steps; the final repair
-must restore the original target.
+Run `sync_pr_body.py <bump-pr-url> [--head <sha>] [--dry-run]` to refresh
+llama.cpp's repository link, branch, and "To" pin from GitHub. The helper
+uses the staging workflow's reference-link table. Branch names sit below
+the table so every table line fits within 72 characters and survives
+squash-merge wrapping. Only llama.cpp's To label, branch line, and repository/To
+link definitions are replaced; everything else is preserved verbatim.
+In particular, this helper does not refresh hrx-system during
+intermediate staircase steps; the final repair must restore the original target.
 
 Callers that just pushed supply `--head <sha>` to avoid reading an outdated
 PR head. `--dry-run` prints the proposed body to stderr without editing the PR.
-An unchanged body needs no edit; an unrecognized row produces a warning and
-leaves the body intact. Invalid URLs and GitHub command failures exit nonzero;
+An unchanged body needs no edit; missing or repeated llama.cpp fields produce
+a warning and leave the body intact.
+Invalid URLs and GitHub command failures exit nonzero;
 unexpected response or parsing errors can also fail. Diagnostics use stderr.
 The [implementation header](sync_pr_body.py) explains the stale-head failure
 that motivates explicit commit selection.

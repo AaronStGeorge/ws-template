@@ -1,23 +1,10 @@
 ---
 name: br
 description: >-
-  Official skill for beads_rust (`br`), a local-first, dependency-aware issue
+  Official skill for beads_rust (`br`, beads), a local-first, dependency-aware issue
   tracker for AI agents. Use when creating issues, triaging backlogs, managing
   dependencies, finding ready work, updating status, or syncing to git via JSONL.
 license: MIT
-domain: project-management
-role: specialist
-scope: operations
-output-format: commands
-triggers:
-  - br
-  - beads
-  - beads_rust
-  - issue tracker
-  - issue triage
-  - backlog
-  - dependencies
-  - ready work
 metadata:
   author: Dicklesworthstone
   version: 1.0.0
