@@ -1,0 +1,4 @@
+interface:
+  display_name: "Beads Rust"
+  short_description: "Manage project issues and dependencies with br"
+  default_prompt: "Use $br for beads_rust (beads) issue tracker operations: triage the project backlog, review dependencies, and identify ready work using br commands."
