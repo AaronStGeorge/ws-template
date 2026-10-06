@@ -317,6 +317,11 @@ def rerun_past_known_bad_runners(pr_url, known_bad_runners_path):
     The list is read here, at Run time, so an edit to the file takes
     effect on the next Run without touching the Daemon.
     """
+    # Substring, not whole-name, match: these runners re-register for
+    # every job under a fresh name ending in a timestamp
+    # (linux-halobox-gpu-rocm-ctr-halobox-b13-gfx1151-gpu0-1791289403),
+    # so no full name is ever seen twice. Each fragment carries its
+    # delimiting dashes, so `-halobox-b13-` cannot match a `halobox-b130`.
     name_fragments = [
         runner["name_contains"]
         for runner in json.loads(

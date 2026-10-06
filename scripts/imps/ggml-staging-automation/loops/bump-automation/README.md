@@ -54,6 +54,8 @@ Before any repair it reruns failures that say nothing about the bump.
 [known-bad-runners.json](../../known-bad-runners.json) lists runners by a
 fragment of their name (`name_contains`; runner names end in a registration
 timestamp, so a full name never repeats) with the reason each is listed.
+A fragment keeps its delimiting dashes, `-halobox-b13-`, so it cannot match
+a differently numbered box.
 While every failed check on the PR ran on a listed runner, the wrapper
 reruns the failed jobs and waits for the verdict. A PR that goes green
 this way ends the Run green with no agent launched. A failure on any other

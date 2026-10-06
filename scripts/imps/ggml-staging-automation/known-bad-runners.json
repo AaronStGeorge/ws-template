@@ -1,7 +1,7 @@
 {
   "runners": [
     {
-      "name_contains": "halobox-b13",
+      "name_contains": "-halobox-b13-",
       "reason": "gfx1151 release benchmark reports decode perplexity NaNs on commits that pass on other gfx1151 runners. On ROCm/ggml-staging-automation PR #92 (2026-10-06) one commit failed twice here and passed on strixhalo-17."
     }
   ]
