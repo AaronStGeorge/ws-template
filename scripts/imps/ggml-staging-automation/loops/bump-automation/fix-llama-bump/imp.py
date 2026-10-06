@@ -5,7 +5,9 @@ The paired sensor.py supplies the bump PR URL. ../README.md defines the
 loop's boundaries and its "When this loop needs a human" judgment, which
 the overseer reads through this header.
 
-This wrapper prepares the agent's workspace and enforces the handoff order:
+This wrapper first reruns checks that failed only on known-bad runners, and
+starts a repair only if the PR is still red. It then prepares the agent's
+workspace and enforces the handoff order:
 log the report, sync the PR body, arm any upstream-merge wait, then check CI.
 STANDING_INSTRUCTIONS owns the repair procedure; the wrapper does not infer
 success from the agent's report. Preparation rationale lives beside the
@@ -24,6 +26,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 # The narrow pattern keeps anything but a real bump PR URL from starting a
@@ -42,6 +45,27 @@ HRX_PUSH_URL = "hrx-system-is-never-pushed"
 # Cloned directly — the imp is self-contained and depends on no local
 # checkout of the staging repo.
 STAGING_REPO_URL = "git@github.com:ROCm/ggml-staging-automation.git"
+
+STAGING_REPO = "ROCm/ggml-staging-automation"
+
+# A failed check's detailsUrl carries the Actions run and job ids. A check
+# reported by anything other than Actions has no runner to look up.
+ACTIONS_JOB_URL = re.compile(
+    r"https://github\.com/ROCm/ggml-staging-automation"
+    r"/actions/runs/(\d+)/job/(\d+)"
+)
+
+# Nothing steers a rerun away from a runner: GitHub hands the job to
+# whichever runner with the label is free, so a rerun can land on a
+# known-bad one again and spend the whole job (about an hour for the
+# release benchmark) before failing. Past this many, the Run fails and
+# says so rather than waiting on luck.
+KNOWN_BAD_RUNNER_RERUNS = 4
+
+# A rerun replaces the failed check within seconds normally; minutes only
+# when GitHub is degraded. Past this the Run fails rather than guessing.
+RERUN_REGISTER_TIMEOUT_SECONDS = 600
+RERUN_REGISTER_POLL_SECONDS = 15
 
 # upstream_pr is the handoff field that arms the reconcile Watch when non-null.
 HANDOFF_SCHEMA = {
@@ -72,6 +96,12 @@ HANDOFF_SCHEMA = {
 # but left their paired lemonade-benchmark `skip`s, so the PR went green
 # with three healthy models still unbenchmarked. Green CI cannot catch
 # that — a skipped check never fails — so the prompt has to say it.
+#
+# The known-bad-runners rule answers fix-bump-pr-92: the benchmark failed
+# on halobox-b13, the agent's rerun landed there again, and the Run ended
+# asking for a bisect of a regression that did not exist. The wrapper
+# settles that case before the agent starts; the rule covers the CI rounds
+# the agent triggers with its own pushes.
 STANDING_INSTRUCTIONS = """\
 Your job: make CI green on {pr_url}.
 
@@ -185,6 +215,14 @@ Working rules:
 
   - Bump PR: {pr_url}
   - Latest run: [link](<latest run link>).
+- Known-bad runners: `known-bad-runners.json` in this workspace lists CI
+  runners whose failures say nothing about the code. Before diagnosing a
+  failed job, read its runner with `gh api
+  repos/ROCm/ggml-staging-automation/actions/jobs/<job-id> --jq
+  .runner_name`. If the name contains a listed `name_contains` value, do
+  not repair anything for it: rerun with `gh run rerun <run-id> --repo
+  ROCm/ggml-staging-automation --failed` and judge the PR by the rerun. A
+  failure that repeats on an unlisted runner is real.
 - Manifest expectations: `benchmarks/hrx/model_manifest.json` records,
   per model under `hrx.expected_results`, the checks not expected to
   pass. A model whose perplexity is expected to fail carries
@@ -231,6 +269,126 @@ def run_to_log(argv, **kwargs):
     return subprocess.run(argv, stdout=sys.stderr.fileno(), **kwargs)
 
 
+def failed_checks(pr_url):
+    """Return the PR's checks that concluded FAILURE."""
+    # stdout=PIPE only, never capture_output: gh's stderr must reach the
+    # Run log, where a failed call is diagnosable by the message gh printed.
+    rollup = json.loads(
+        subprocess.run(
+            ["gh", "pr", "view", pr_url, "--json", "statusCheckRollup"],
+            check=True,
+            stdout=subprocess.PIPE,
+            text=True,
+        ).stdout
+    )["statusCheckRollup"]
+    return [check for check in rollup if check.get("conclusion") == "FAILURE"]
+
+
+def wait_for_rerun_to_register(pr_url):
+    """Block until the PR's rollup no longer holds a failed check.
+
+    Right after `gh run rerun` GitHub can still serve the previous
+    attempt's failure, and a watch started then returns that old verdict
+    almost immediately. The rerun has registered once its queued check
+    has replaced the failed one. Past the bounded wait, exit nonzero: a
+    Run that cannot tell what CI thinks must fail as needing attention.
+    """
+    deadline = time.monotonic() + RERUN_REGISTER_TIMEOUT_SECONDS
+    while failed_checks(pr_url):
+        timed_out = time.monotonic() >= deadline
+        if timed_out:
+            raise SystemExit(
+                f"rerun did not replace the failed checks on {pr_url} "
+                f"within {RERUN_REGISTER_TIMEOUT_SECONDS}s; cannot take a "
+                "CI verdict"
+            )
+        time.sleep(RERUN_REGISTER_POLL_SECONDS)
+
+
+def rerun_past_known_bad_runners(pr_url, known_bad_runners_path):
+    """Rerun red checks while every failure ran on a known-bad runner.
+
+    Returns whether the PR is green. A failure on a known-bad runner says
+    nothing about the bump, so a repair started from it chases a
+    regression that does not exist. Any failure on another runner is
+    taken as real and returns False at once, leaving the repair to the
+    agent.
+
+    The list is read here, at Run time, so an edit to the file takes
+    effect on the next Run without touching the Daemon.
+    """
+    name_fragments = [
+        runner["name_contains"]
+        for runner in json.loads(
+            known_bad_runners_path.read_text(encoding="utf-8")
+        )["runners"]
+    ]
+
+    reruns_left = KNOWN_BAD_RUNNER_RERUNS
+    while True:
+        # --watch first: only a completed run can be rerun, and the Sensor
+        # launches on the first failed check while others may still run.
+        checks = run_to_log(
+            ["gh", "pr", "checks", pr_url, "--watch", "--interval", "60"]
+        )
+        bump_pr_is_green = checks.returncode == 0
+        if bump_pr_is_green:
+            return True
+
+        run_ids_to_rerun = set()
+        failures_elsewhere = []
+        for check in failed_checks(pr_url):
+            job_url = ACTIONS_JOB_URL.fullmatch(check.get("detailsUrl") or "")
+            runner_name = ""
+            if job_url is not None:
+                runner_name = subprocess.run(
+                    ["gh", "api",
+                     f"repos/{STAGING_REPO}/actions/jobs/{job_url.group(2)}",
+                     "--jq", '.runner_name // ""'],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    text=True,
+                ).stdout.strip()
+            print(
+                f"failed check {check['name']!r} ran on "
+                f"{runner_name or 'no identifiable runner'}",
+                file=sys.stderr,
+            )
+            ran_on_known_bad_runner = any(
+                fragment in runner_name for fragment in name_fragments
+            )
+            if ran_on_known_bad_runner:
+                run_ids_to_rerun.add(job_url.group(1))
+            else:
+                failures_elsewhere.append(check["name"])
+
+        # A red PR with no FAILURE conclusion (cancelled, timed out) has
+        # nothing to rerun here and is the agent's to read.
+        has_known_bad_runner_failure = len(run_ids_to_rerun) > 0
+        has_failure_elsewhere = len(failures_elsewhere) > 0
+        only_known_bad_runners_failed = (
+            has_known_bad_runner_failure and not has_failure_elsewhere
+        )
+        if not only_known_bad_runners_failed:
+            return False
+
+        if reruns_left == 0:
+            raise SystemExit(
+                f"bump PR is red only on known-bad runners after "
+                f"{KNOWN_BAD_RUNNER_RERUNS} reruns; every rerun landed on "
+                f"one again. Rerun {pr_url} by hand or take the runner out "
+                "of service"
+            )
+        reruns_left -= 1
+        for run_id in sorted(run_ids_to_rerun):
+            run_to_log(
+                ["gh", "run", "rerun", run_id,
+                 "--repo", STAGING_REPO, "--failed"],
+                check=True,
+            )
+        wait_for_rerun_to_register(pr_url)
+
+
 def main():
     # Direct human launches can supply URLs outside the staging repository.
     parser = argparse.ArgumentParser()
@@ -262,6 +420,26 @@ def main():
             "not on PATH); run `codex login` and relaunch"
         )
 
+    # The workspace root comes from this file's own location
+    # (scripts/imps/ggml-staging-automation/loops/bump-automation/fix-llama-bump/imp.py),
+    # used only for the agent-config and .venv symlinks below. The project
+    # directory (scripts/imps/ggml-staging-automation) holds the build.py
+    # and known-bad-runners.json shared with the standalone imps; the loop
+    # directory holds sync_pr_body.py.
+    ws = Path(__file__).resolve().parents[6]
+    here = Path(__file__).resolve().parent
+    project = here.parents[2]
+
+    # Settle known-bad-runner failures before cloning anything: when they
+    # were the only failures, the rerun is the whole Run.
+    bump_pr_is_green = rerun_past_known_bad_runners(
+        pr_url, project / "known-bad-runners.json"
+    )
+    if bump_pr_is_green:
+        print(f"bump PR is green; nothing to repair: {pr_url}",
+              file=sys.stderr)
+        return
+
     # slug == the Run Id convention sensor.py emits — the trick that
     # lets fork branches (`{slug}-1`, …) trace to their Run without this
     # process ever being told its Run Id.
@@ -278,14 +456,6 @@ def main():
         text=True,
     ).stdout.strip()
 
-    # The workspace root comes from this file's own location
-    # (scripts/imps/ggml-staging-automation/loops/bump-automation/fix-llama-bump/imp.py),
-    # used only for the agent-config and .venv symlinks below. The project
-    # directory (scripts/imps/ggml-staging-automation) holds the build.py
-    # shared with the standalone imps; the loop directory holds sync_pr_body.py.
-    ws = Path(__file__).resolve().parents[6]
-    here = Path(__file__).resolve().parent
-    project = here.parents[2]
     wsdir = Path(tempfile.mkdtemp(prefix=f"{slug}-"))
 
     clone = wsdir / "ggml-staging-automation"
@@ -338,6 +508,9 @@ def main():
     # is accepted.
     (wsdir / ".venv").symlink_to(ws / ".venv", target_is_directory=True)
     shutil.copy2(project / "build.py", wsdir / "build.py")
+    shutil.copy2(
+        project / "known-bad-runners.json", wsdir / "known-bad-runners.json"
+    )
     shutil.copy2(here.parent / "sync_pr_body.py", wsdir / "sync_pr_body.py")
 
     print(f"run workspace: {wsdir}", file=sys.stderr)

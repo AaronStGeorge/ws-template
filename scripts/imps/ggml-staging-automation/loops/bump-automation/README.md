@@ -15,7 +15,10 @@ The workspace's [overseer](../../../overseer/imp.py) checks the newest
 human when one is needed. `sync_pr_body.py` keeps the bump PR's
 description truthful while the bump Imps move its llama.cpp pin. The
 project's shared [build.py](../../build.py) provides local build
-infrastructure for the fix Imp. The two bump Imps clone
+infrastructure for the fix Imp, and its
+[known-bad-runners.json](../../known-bad-runners.json) names the CI
+runners whose failures the fix Imp reruns instead of repairing. The two
+bump Imps clone
 `ROCm/ggml-staging-automation` from GitHub and depend on no checkout under
 `sources/`.
 
@@ -46,6 +49,20 @@ It exits 0 iff the bump PR is green, verified mechanically by the wrapper
 agent's self-report. A break that cannot be fixed in llama.cpp alone ends
 the Run with the problem described in the Run log and a red PR, which
 fails the Run.
+
+Before any repair it reruns failures that say nothing about the bump.
+[known-bad-runners.json](../../known-bad-runners.json) lists runners by a
+fragment of their name (`name_contains`; runner names end in a registration
+timestamp, so a full name never repeats) with the reason each is listed.
+While every failed check on the PR ran on a listed runner, the wrapper
+reruns the failed jobs and waits for the verdict. A PR that goes green
+this way ends the Run green with no agent launched. A failure on any other
+runner is taken as real and starts the repair, where the agent applies the
+same list to the CI rounds its own pushes trigger. Nothing steers a rerun
+away from a runner, so one can land on a listed runner again; after four
+such reruns the Run fails and its log says so. The file is read when a Run
+starts: adding a runner takes effect on the next Run, with no Daemon
+restart.
 
 It drives the PR green as a staircase of green llama.cpp bumps: each
 commit pairs a llama.cpp fix with the hrx-system break it answers, and the
@@ -181,8 +198,10 @@ The loop needs a human when:
 - A Run failed and its bump PR is still open. Quote the tail of its log.
   The common causes: the codex login lapsed (the Run says so before
   cloning anything); a break that could not be fixed in llama.cpp alone
-  (the log describes the hrx-system change needed); a PR red after a
-  repoint (the log holds a diagnosis).
+  (the log describes the hrx-system change needed); every rerun of a
+  known-bad-runner failure landed on a listed runner again (the log says
+  so; rerun by hand or get the runner taken out of service); a PR red
+  after a repoint (the log holds a diagnosis).
 - A pending one-shot Watch's upstream PR is CLOSED without merging. The
   Watch pends forever, on purpose; the human decides.
 - A bump PR MERGED while still pointed at the fork. The repoint Run

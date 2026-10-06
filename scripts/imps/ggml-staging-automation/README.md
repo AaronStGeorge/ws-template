@@ -4,6 +4,9 @@ Everything imp in this workspace that acts on
 [ROCm/ggml-staging-automation](https://github.com/ROCm/ggml-staging-automation)
 lives here. [scripts/imps/README.md](../README.md) describes the layout, and
 [build.py](build.py) supplies the shared build driver for repair workspaces.
+[known-bad-runners.json](known-bad-runners.json) lists the project's CI
+runners whose failures are not evidence about the code; the bump loop's
+[README](loops/bump-automation/README.md) describes how the fix Imp uses it.
 Bring the project up with both Manifests:
 
 ```sh
