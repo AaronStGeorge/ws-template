@@ -16,5 +16,8 @@ build/
 build/
 .imp/
 
+# Thread worktrees (lib/python/threadlib/README.md)
+.threads/
+
 # Local issue tracker state
 .beads/
