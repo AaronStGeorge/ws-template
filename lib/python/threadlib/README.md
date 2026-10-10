@@ -142,7 +142,10 @@ only Codex's own door can make one, so a bead id cannot enter through them.
   executable over it; an Imp imports it. No MCP server until a shell-less
   client needs one; a skill wrapping the executable serves agents.
 - The Imp door is a Run through `impd`, so an Imp's thread has a Run Id and
-  a log as every Run does. How the Run Id and the bead id relate is open.
+  a log as every Run does. Imps have no beads to start with, so an Imp's
+  thread is named after its Run Id and the Imp names the sourceset itself.
+  How a Run Id and a bead id relate is decided when an Imp first has a
+  bead, not before.
 - Every Imp moves onto this, the bump loop included; temp-dir clones and
   `codex exec` go away.
 - A bead is optional and the thread's name comes from it when present.
@@ -155,7 +158,6 @@ only Codex's own door can make one, so a bead id cannot enter through them.
 
 ### Open
 
-- How an Imp's Run Id and its bead id relate.
 - Whether `ws_load.py`'s refuse-if-unsaved check survives when every load
   targets a fresh worktree.
 - What a thread is told about beads beyond "work on bead `<id>`".
