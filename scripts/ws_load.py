@@ -13,6 +13,11 @@ Loading replaces whatever ``sources/`` holds, so it first refuses if anything
 there exists only locally. Assets are symlinked rather than copied so that edits
 made through ``sources/`` land in the tracked ``assets/`` directory.
 
+This is the by-hand door for the main checkout's ``sources/``, kept for review
+and human-in-the-loop work. Thread worktrees are filled by threadlib instead
+(``lib/python/threadlib/README.md``), which is where the loading itself is to
+move; the refusal above belongs only here, where a load can destroy work.
+
     python scripts/ws_load.py llama-cpp
 """
 
