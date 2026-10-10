@@ -28,6 +28,7 @@ The requirements, from the session:
   human or an Imp started it: a live status, openable, steerable.
 - Other agents can send a running thread a message.
 - Every door (terminal, skill, Imp) is the same program.
+- An agent can start a sibling thread and carry on without waiting for it.
 
 ## Language
 
@@ -53,23 +54,29 @@ checkout). A bead names its sourceset with the label `sourceset:<name>`.
 and serves the command center. Never "the Daemon": in this workspace that
 word is `impd`.
 
-**Door** — a way of asking for a new thread. The human door is the
-`thread` executable; the non-human door is an Imp calling the library.
+**Door** — a way of asking for a new thread. Three exist: the human door
+(`thread new`, ending in an interactive session), the agent door
+(`thread new --prompt`, starting the first turn and returning), and the
+Imp door (the library, blocking until the turn is done).
 
 ## What threadlib commits to
 
 The human door:
 
 ```
-thread new <bead-id>                      # named after the bead; sourceset from its label
-thread new --name <slug> --sourceset <s>  # no bead; both flags required
+thread new <bead-id>                         # named after the bead; sourceset from its label
+thread new --name <slug> --sourceset <s>     # no bead; both flags required
+thread new <bead-id-or-flags> --prompt TEXT  # agent door: start the first turn, print the name, return
 ```
 
-Either form ends with an interactive `codex` attached to the new thread,
-inside the new worktree, with the thread already named. The non-human door
-is the same steps as a library call that ends with the opening prompt sent
-and the call blocking until the turn is done; it returns the turn's outcome
-for the Imp to turn into an exit code.
+Without `--prompt`, either form ends with an interactive `codex` attached
+to the new thread, inside the new worktree, with the thread already named.
+With `--prompt`, the agent door, the thread's first turn is started with
+that prompt and the command returns at once, printing the thread's name;
+the caller follows up with `codex queue --thread <name>` or by opening the
+thread. The Imp door is the same steps as a library call that ends with the
+opening prompt sent and the call blocking until the turn is done; it
+returns the turn's outcome for the Imp to turn into an exit code.
 
 What both doors guarantee once they return:
 
@@ -114,10 +121,11 @@ Every door runs the same steps; only the last differs.
    a thread that paused for approval would hang with no one watching and
    the imp design record's constraints ask for no hardening. Both doors do this, which is
    what makes their threads indistinguishable in the command center.
-6. **Door.** Human: exec `codex resume <thread>` in the worktree. Imp: send
-   `turn/start` with the prompt, stream the thread's events into the Run
-   log, return the turn's outcome. The thread stays on the daemon
-   afterwards as a Ready row.
+6. **Door.** Human: exec `codex resume <thread>` in the worktree. Agent:
+   send `turn/start` with the prompt, print the thread's name, return.
+   Imp: send `turn/start` with the prompt, stream the thread's events into
+   the Run log, return the turn's outcome. In every case the thread stays
+   on the daemon afterwards as a Ready row.
 
 ### Why the thread lives on Codex's daemon and not in `codex exec`
 
@@ -142,9 +150,10 @@ only Codex's own door can make one, so a bead id cannot enter through them.
 
 ### Decisions in force
 
-- One library, two doors. The library is the launcher; `thread` is a thin
-  executable over it; an Imp imports it. No MCP server until a shell-less
-  client needs one; a skill wrapping the executable serves agents.
+- One library, three doors. The library is the launcher; `thread` is a
+  thin executable over it for the human and agent doors; an Imp imports it.
+  No MCP server until a shell-less client needs one; the skill that serves
+  agents is one line telling them to run `thread new ... --prompt`.
 - The Imp door is a Run through `impd`, so an Imp's thread has a Run Id and
   a log as every Run does. Imps have no beads to start with, so an Imp's
   thread is named after its Run Id and the Imp names the sourceset itself.
