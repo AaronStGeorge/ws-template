@@ -90,8 +90,10 @@ What both doors guarantee once they return:
 Every door runs the same steps; only the last differs.
 
 1. **Name.** The bead id, or the given slug. Thread and worktree carry it.
-2. **Worktree.** `git worktree add --detach` of the workspace, under a root
-   the workspace owns (root and path pattern still open). The workspace
+2. **Worktree.** `git worktree add --detach` of the workspace at
+   `.threads/<name>` inside the clone, gitignored like `.imp/`, so a
+   thread's worktree is spelled the same as its thread and its bead, and
+   everything about a workspace stays in the workspace. The workspace
    worktree takes no branch; only sourceset checkouts would, and that is
    part of the open bead process. `sources/` is gitignored, so it starts
    empty.
@@ -153,8 +155,6 @@ only Codex's own door can make one, so a bead id cannot enter through them.
 
 ### Open
 
-- The worktree root and path pattern (a root inside the clone shows as
-  untracked until gitignored).
 - How an Imp's Run Id and its bead id relate.
 - Whether `ws_load.py`'s refuse-if-unsaved check survives when every load
   targets a fresh worktree.
