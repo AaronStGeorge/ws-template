@@ -155,9 +155,14 @@ only Codex's own door can make one, so a bead id cannot enter through them.
   launches a Run.
 - The bead process beyond the opening prompt is unspecified on purpose, to
   be discovered by use.
+- Sourceset loading moves into threadlib as a function, and
+  `scripts/ws_load.py` becomes a thin command over it for filling the main
+  checkout's `sources/` by hand, which stays a real use: work is loaded
+  there outside any thread for review and for human-in-the-loop work. The
+  refuse-if-unsaved check stays on that by-hand path only, the one place a
+  load can destroy work; the thread path always targets an empty
+  `sources/` and carries no guard that cannot fire.
 
 ### Open
 
-- Whether `ws_load.py`'s refuse-if-unsaved check survives when every load
-  targets a fresh worktree.
 - What a thread is told about beads beyond "work on bead `<id>`".
