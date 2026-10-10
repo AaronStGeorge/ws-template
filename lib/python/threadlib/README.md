@@ -108,7 +108,11 @@ Every door runs the same steps; only the last differs.
    `sources/`).
 5. **Thread.** Ensure Codex's daemon is up, connect to its socket, send
    `thread/start` with the worktree as cwd and the door's approval and
-   sandbox settings, then `thread/name/set`. Both doors do this, which is
+   sandbox settings, then `thread/name/set`. The human door passes
+   nothing and gets the user's own Codex defaults; the Imp door sets
+   approvals to never and the sandbox off, as the imps run today, because
+   a thread that paused for approval would hang with no one watching and
+   the imp design record's constraints ask for no hardening. Both doors do this, which is
    what makes their threads indistinguishable in the command center.
 6. **Door.** Human: exec `codex resume <thread>` in the worktree. Imp: send
    `turn/start` with the prompt, stream the thread's events into the Run
