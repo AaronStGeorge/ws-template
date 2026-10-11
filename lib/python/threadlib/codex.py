@@ -42,13 +42,23 @@ def socket_path() -> Path:
 
 
 def ensure_daemon(log) -> None:
-    """Start Codex's daemon if it is not running; idempotent."""
-    subprocess.run(
+    """Start Codex's daemon if it is not running; idempotent.
+
+    The command reports its stages as JSON lines on stdout; only the last
+    line's status (started, alreadyRunning) is worth a log line.
+    """
+    started = subprocess.run(
         ["codex", "app-server", "daemon", "start"],
-        check=True,
-        stdout=log,
-        stderr=log,
+        capture_output=True,
+        text=True,
     )
+    if started.returncode != 0:
+        print(started.stdout, started.stderr, file=log)
+        raise RuntimeError(
+            f"`codex app-server daemon start` exited {started.returncode}"
+        )
+    status = json.loads(started.stdout.splitlines()[-1]).get("status")
+    print(f"codex daemon: {status}", file=log)
 
 
 @dataclass

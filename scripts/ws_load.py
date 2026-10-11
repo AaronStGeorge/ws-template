@@ -58,7 +58,11 @@ def main() -> int:
     parser.add_argument("name", help="Directory name under sourcesets/.")
     args = parser.parse_args()
 
-    sourceset = read_sourceset(REPO_ROOT, args.name)
+    try:
+        sourceset = read_sourceset(REPO_ROOT, args.name)
+    except FileNotFoundError as error:
+        print(f"ws_load: {error}", file=sys.stderr)
+        return 1
 
     entries = loaded_entries()
     blocked = {entry: reasons for entry in entries if (reasons := unsaved_work(entry))}
