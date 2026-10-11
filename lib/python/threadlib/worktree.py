@@ -25,7 +25,10 @@ def create(workspace: Path, name: str, log) -> Path:
     """
     path = threads_dir(workspace) / name
     if path.exists():
-        raise FileExistsError(f"thread worktree already exists: {path}")
+        raise FileExistsError(
+            f"thread worktree already exists: {path}; remove it with "
+            f"`git worktree remove {path}` to use the name again"
+        )
     path.parent.mkdir(exist_ok=True)
     subprocess.run(
         ["git", "-C", str(workspace), "worktree", "add", "--detach", str(path), "HEAD"],
