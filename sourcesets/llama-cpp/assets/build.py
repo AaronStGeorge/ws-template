@@ -6,11 +6,11 @@ The reusable modules in ``lib/python/builds`` know *how* to obtain ROCm and
 build each project; the driver knows *where* the checkouts are, which knobs its
 CLI exposes, and their composition order.
 
-``scripts/ws_load.py`` symlinks this file into ``sources/`` beside the checkouts
+Loading the sourceset symlinks this file into ``sources/`` beside the checkouts
 it builds, and it finds them as its siblings there::
 
     sources/
-      build.py -> ../workspaces/llama-cpp/assets/build.py
+      build.py -> ../sourcesets/llama-cpp/assets/build.py
       hrx-system/
       llama.cpp/
 
