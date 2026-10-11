@@ -1,6 +1,6 @@
-# Python stuff
+# Python stuff (.venv without a slash: a thread worktree's .venv is a symlink)
 __pycache__/
-.venv/
+.venv
 *.egg-info/
 
 # Build directories, usually under sources/projectX/build

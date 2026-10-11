@@ -14,13 +14,16 @@ The workspace's [overseer](../../../overseer/imp.py) checks the newest
 `fix-llama-bump` Run every weekday morning and opens a thread for the
 human when one is needed. `sync_pr_body.py` keeps the bump PR's
 description truthful while the bump Imps move its llama.cpp pin. The
-project's shared [build.py](../../build.py) provides local build
-infrastructure for the fix Imp, and its
+[ggml-staging-automation sourceset](../../../../../sourcesets/ggml-staging-automation/sourceset.json)
+and its `build.py` asset provide the clone and local build infrastructure
+for the fix Imp, and the project's
 [known-bad-runners.json](../../known-bad-runners.json) names the CI
-runners whose failures the fix Imp reruns instead of repairing. The two
-bump Imps clone
-`ROCm/ggml-staging-automation` from GitHub and depend on no checkout under
-`sources/`.
+runners whose failures the fix Imp reruns instead of repairing. Each bump
+Imp works in a thread of its own
+([threadlib](../../../../../lib/python/threadlib/README.md)): a worktree
+at `.threads/<run-id>` whose `sources/ggml-staging-automation` is a fresh
+clone from GitHub, independent of the main checkout's `sources/`, and whose
+agent runs on Codex's daemon.
 
 The Manifest, [bump-loop.json](bump-loop.json), inscribes the loop's two
 Sigils and the workspace's `overseer`, and declares two standing Watches.
@@ -34,9 +37,10 @@ Bring it up with:
 impctl up --manifest scripts/imps/ggml-staging-automation/loops/bump-automation/bump-loop.json
 ```
 
-Prerequisites: `gh`, `codex`, and `claude` logged in, and `impctl` on
-`PATH` when `up` runs (the workspace `.envrc` does this), because the fix
-Imp invokes it bare and every Run inherits the Daemon's environment.
+Prerequisites: `gh`, `codex`, and `claude` logged in, and the workspace
+`.envrc` in effect when `up` runs, because every Run inherits the Daemon's
+environment: the fix Imp invokes `impctl` bare, and every Imp's `python3`
+must be the venv's to import threadlib.
 
 ## `fix-llama-bump`
 
@@ -109,10 +113,13 @@ weeks between uses and its login lapses; the Run fails with a log line
 saying so, and the human runs `codex login` and relaunches under a fresh
 Run Id.
 
-The temporary workspace and numbered fork branches share the prefix
-`fix-bump-pr-<N>`, matching the automatic Run Id. Preparation details and their
-rationale are in [imp.py](fix-llama-bump/imp.py). A manual Run Id may differ
-from this PR-derived prefix.
+The thread, its worktree `.threads/fix-bump-pr-<N>` and the numbered fork
+branches share the prefix `fix-bump-pr-<N>`, matching the automatic Run Id.
+Preparation details and their rationale are in [imp.py](fix-llama-bump/imp.py).
+A manual Run Id may differ from this PR-derived prefix, but the thread name
+does not: relaunching a PR's fix means removing the earlier Run's worktree
+first (`git worktree remove .threads/fix-bump-pr-<N>`), or the Run fails
+saying so.
 
 ## `repoint-llama-bump`
 
@@ -139,11 +146,13 @@ fails the Run. It then
 syncs the PR body from the pushed sha and runs `gh pr checks --watch`,
 whose exit code determines success. There is no automatic retry.
 
-Red launches codex for a diagnosis only, under an explicit change-nothing
+Red sends codex a diagnosis turn only, under an explicit change-nothing
 rule; the diagnosis is printed
 to the Run log and the Run exits nonzero so it is flagged as needing
-attention. The run workspace prefix derives from the bump PR number,
-matching the automatic Run Id; a manual Run Id may differ.
+attention. The thread and its worktree are named `fix-bump-pr-<N>-repoint`,
+matching the automatic Run Id, and exist from the start of the Run even
+when CI stays green and no turn is sent; a manual Run Id may differ, and a
+relaunch removes the earlier worktree first.
 
 ## The Sensors
 
@@ -206,7 +215,8 @@ The loop needs a human when:
   (the log describes the hrx-system change needed); every rerun of a
   known-bad-runner failure landed on a listed runner again (the log says
   so; rerun by hand or get the runner taken out of service); a PR red
-  after a repoint (the log holds a diagnosis).
+  after a repoint (the log holds a diagnosis); a worktree left by an
+  earlier Run of the same PR (the log names the `git worktree remove`).
 - A pending one-shot Watch's upstream PR is CLOSED without merging. The
   Watch pends forever, on purpose; the human decides.
 - A bump PR MERGED while still pointed at the fork. The repoint Run

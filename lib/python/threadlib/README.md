@@ -6,8 +6,9 @@ center (`/agents`) as a live, named, openable row. threadlib is the one
 program that makes a thread, and every door onto a new thread goes through
 it: the `thread` executable for a human at a terminal, the library for an
 Imp or an agent that starts a thread from inside its own. This README is
-the design record for the component; the code does not exist yet, and the
-decisions here were settled in a grilling session on 2026-10-10.
+the design record for the component, settled in a grilling session on
+2026-10-10 and implemented on the same branch; the code is the files beside
+it, each with a header saying what it owns.
 
 ## Why
 
@@ -38,11 +39,11 @@ This component inherits the imp design record's Language
 **Workspace** — a clone of this repository: skills, the imp runtime,
 `sources/`. The imp design record already uses the word this way.
 
-**Sourceset** — a checked-in manifest naming the repositories that fill
-`sources/`, plus assets that belong beside them. Today it lives at
-`workspaces/<name>/workspace.json` and is loaded by
-[scripts/ws_load.py](../../../scripts/ws_load.py); the settled name is
-`sourcesets/<name>/sourceset.json`, and the rename lands with the loader.
+**Sourceset** — a checked-in manifest, `sourcesets/<name>/sourceset.json`,
+naming the repositories that fill `sources/`, plus an `assets/` directory
+of files that belong beside them. sourceset.py reads and loads one;
+[scripts/ws_load.py](../../../scripts/ws_load.py) is the by-hand door for
+the main checkout's `sources/`.
 
 **Thread** — one Codex session in one worktree of the workspace, hosted
 on Codex's daemon, named after its bead or its given name.
@@ -64,31 +65,50 @@ Imp door (the library, blocking until the turn is done).
 The human door:
 
 ```
-thread new <bead-id>                         # named after the bead; sourceset from its label
-thread new --name <slug> --sourceset <s>     # no bead; both flags required
-thread new <bead-id-or-flags> --prompt TEXT  # agent door: start the first turn, print the name, return
+thread new <bead-id>                          # named after the bead; sourceset from its label
+thread new --name <slug> [--sourceset <s>]    # no bead; without a sourceset sources/ stays empty
+thread new <bead-id-or-flags> --prompt TEXT   # agent door: start the first turn, print the name, return
 ```
 
 Without `--prompt`, either form ends with an interactive `codex` attached
-to the new thread, inside the new worktree, with the thread already named.
-With `--prompt`, the agent door, the thread's first turn is started with
-that prompt and the command returns at once, printing the thread's name;
-the caller follows up with `codex queue --thread <name>` or by opening the
-thread. The Imp door is the same steps as a library call that ends with the
-opening prompt sent and the call blocking until the turn is done; it
-returns the turn's outcome for the Imp to turn into an exit code.
+to the new thread, inside the new worktree, with the thread already named;
+on a bead, the opening prompt ("Work on bead `<id>`...") is typed for you
+as the first turn. With `--prompt`, the agent door, the thread's first turn
+is started with that prompt (after the bead prompt, when there is a bead)
+and the command returns at once, printing the thread's name; the caller
+follows up with `codex queue --thread <name>` or by opening the thread.
+The Imp door is the library: `prepare(name, sourceset, settings)` runs the
+shared steps and returns the thread and the daemon connection, and
+`run_turn(client, thread, prompt, output_schema)` sends the opening prompt,
+streams the turn's items into the Run log, and returns a `TurnResult`
+(status, error, last agent message) for the Imp to turn into an exit code.
+`IMP_DOOR_SETTINGS` is the Imp door's approval and sandbox choice; an Imp
+adds a `model` or `config` to it when its Manifest configures one.
 
-What both doors guarantee once they return:
+What every door guarantees once it returns:
 
-- A detached worktree of the workspace exists for the thread, with
-  `sources/` holding the sourceset's repositories and assets.
-- A thread named after the bead (or the slug) exists on Codex's daemon with
-  the worktree as its cwd, so it is a row in the command center from its
-  first second and `codex resume <name>` and `codex queue --thread <name>`
-  both reach it.
+- A detached worktree of the workspace exists at `.threads/<name>`, with
+  `sources/` holding the sourceset's repositories and assets, or empty
+  when no sourceset was named.
+- A thread named `<name>` exists on Codex's daemon with the worktree as its
+  cwd, so it is a row in the command center from its first turn and
+  `codex resume <name>` and `codex queue --thread <name>` both reach it.
 - With a bead, the thread's opening prompt says to work on that bead. That
   is the whole bead process for now; claiming, branching, handoff and close
   are deliberately unspecified until use shows what they should be.
+
+A name that already has a worktree is refused, with the `git worktree
+remove` that frees it: a thread name is also a Codex thread name, and two
+threads sharing a checkout would share each other's half-done work. This
+is what an Imp hits when a Run is relaunched for the same PR; removing the
+old worktree is part of the relaunch. Names are the Run Id slug shape
+(lowercase, digits, hyphens, at most 64 characters), checked where they
+enter: the command line, and a bead id read back from `br`.
+
+Failures before the thread exists (no such sourceset, a bead without a
+`sourceset:` label, a bead `br` does not know, a worktree in the way) exit
+1 with one line on stderr. A worktree that was cut before a later step
+failed is left in place for inspection, like a failed Run's log.
 
 ## Design
 
@@ -105,9 +125,10 @@ Every door runs the same steps; only the last differs.
    part of the open bead process. `sources/` is gitignored, so it starts
    empty.
 3. **Sources.** Load the sourceset into the worktree's `sources/`, taken
-   from the bead's `sourceset:` label or the `--sourceset` flag. Full
-   clones, every time; a clone cache is a later addition that does not
-   change this shape.
+   from the bead's `sourceset:` label or the `--sourceset` flag; none
+   leaves `sources/` empty, for threads that work on the workspace itself
+   (the overseer's checks). Full clones, every time; a clone cache is a
+   later addition that does not change this shape.
 4. **Bead.** Nothing to wire. `br` run inside a linked worktree that has no
    `.beads/` of its own resolves to the primary checkout's `.beads/`
    through the worktree's `.git` file (tested with br 0.7.4 from a worktree
@@ -137,14 +158,18 @@ exec threads also go unnoticed by an already-open command center until it
 reconnects. Hosting on the daemon is the only path that gives an Imp's
 thread a live "Working" row and lets `codex queue` reach it mid-run.
 
-Verified against codex-cli 0.162.1: a plain `codex app-server` on stdio
-accepts `initialize`, `thread/start {cwd}`, `thread/name/set` with no
-login; the name lands in the state DB and `session_index.jsonl` before any
-turn; `codex exec resume <name>` then resolves it; `codex queue --thread
-<name> --message` writes to the shared queue, which the hosting server
-drains when the thread goes idle. The daemon's own socket is
-`$CODEX_HOME/app-server-control/app-server-control.sock`, JSON-RPC over
-WebSocket, mode 0600, no token. Codex's managed worktrees (`--worktree`)
+Verified against codex-cli 0.162.1: the daemon's socket,
+`$CODEX_HOME/app-server-control/app-server-control.sock` (a symlink into
+`/tmp`; JSON-RPC 2.0 over WebSocket, mode 0600, no token), accepts
+`initialize`, `thread/start {cwd, approvalPolicy, sandbox, model, config}`,
+`thread/name/set` and `turn/start {input, outputSchema}` with no login; the
+name lands in the state DB and `session_index.jsonl` before any turn;
+`codex exec resume <name>` then resolves it; a turn keeps running after the
+client that started it disconnects; `codex queue --thread <name> --message`
+writes to the shared queue, which the hosting server drains when the
+thread goes idle. codex.py is the client, on the `websockets` package; it
+reads the socket path from `CODEX_HOME` and starts the daemon with `codex
+app-server daemon start`, which is a no-op when it is already up. Codex's managed worktrees (`--worktree`)
 were rejected: random path, always detached, no branch, no base ref, and
 only Codex's own door can make one, so a bead id cannot enter through them.
 
@@ -160,7 +185,10 @@ only Codex's own door can make one, so a bead id cannot enter through them.
   How a Run Id and a bead id relate is decided when an Imp first has a
   bead, not before.
 - Every Imp moves onto this, the bump loop included; temp-dir clones and
-  `codex exec` go away.
+  `codex exec` are gone. An Imp that needs the workspace venv in its
+  worktree symlinks the main checkout's `.venv` itself, as the imps did
+  into their temp dirs: Codex's daemon runs the agent's shell without
+  direnv, and the tradeoff of a shared venv is the Imp's to accept.
 - A bead is optional and the thread's name comes from it when present.
 - `impctl` is not the launcher. The imp design record asks it to be the
   dumb Daemon client; git worktrees, sourcesets and Codex's daemon are all
