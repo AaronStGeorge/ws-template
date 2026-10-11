@@ -13,7 +13,9 @@ the check follows only the Run's log, source, README, and references. An older
 version asked the agent to survey all Runs and summoned for an unrelated
 standalone failure. Selecting one root avoids a growing list of exclusions.
 
-With no root Run, the Imp succeeds without a check. Otherwise a Codex check
+With no root Run, the Imp succeeds without a check. Otherwise a Codex check,
+run as a thread named after --run-id (lib/python/threadlib/README.md: a
+worktree of this workspace with empty sources/, hosted on Codex's daemon),
 returns needs_human, headline, and findings. A positive verdict opens a Claude
 Code thread named after --run-id, instructed to investigate, push one headline,
 and await direction without making changes. Unusable Codex opens a thread
@@ -35,16 +37,19 @@ unsupported because the root would be the Run doing the checking.
 
 Change-nothing and root-only restrictions are prompt instructions, not sandbox
 guarantees. The Codex sandbox is bypassed because the read-only sandbox tried
-here blocked the network access gh needs.
+here blocked the network access gh needs. The check's cwd is its worktree,
+which has no .imp/, so the prompt tells it to run impctl from the workspace
+root, where the Daemon's socket is.
 """
 
 import argparse
 import json
 import subprocess
 import sys
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+from threadlib import IMP_DOOR_SETTINGS, prepare, run_turn
 
 # The Imp process contract makes cwd the workspace root. Bare `impctl`
 # resolves the Daemon from the same cwd, so the Runs listed and the paths
@@ -126,9 +131,11 @@ UTC; the document's `started` is when the Run began.
    `{runs_dir}/<run-id>.log`), a pull request through `gh`, a Watch by
    its argv (`impctl watches`; Sensor diagnostics in `{watch_log}`).
 
-`impctl runs` and `impctl watches` list every imp in the workspace. A Run
-or Watch that this Run's log and README do not lead you to is not yours:
-do not read its log and do not report it.
+`impctl runs` and `impctl watches` list every imp in the workspace. Run
+them from `{root}` (`cd {root} && impctl runs`): the Daemon's socket is
+found through the working directory, and yours is a worktree of the
+workspace with no `.imp/`. A Run or Watch that this Run's log and README do
+not lead you to is not yours: do not read its log and do not report it.
 
 # What needs a human
 
@@ -252,11 +259,13 @@ def codex_lapsed_verdict(sigil, run):
     }
 
 
-def run_check(args, root_run, tmp):
-    """The codex check, schema-forced to the verdict."""
-    schema_path = tmp / "verdict-schema.json"
-    verdict_path = tmp / "verdict.json"
-    schema_path.write_text(json.dumps(VERDICT_SCHEMA), encoding="utf-8")
+def run_check(args, root_run):
+    """The codex check, schema-forced to the verdict.
+
+    The check is a thread named after this Run, with no sourceset: it reads
+    the workspace's own .imp/ and sources, all by absolute path. The model
+    and effort the Manifest configures ride on the thread's settings.
+    """
     prompt = CHECK_PROMPT.format(
         sigil=args.sigil,
         root=ROOT,
@@ -266,21 +275,22 @@ def run_check(args, root_run, tmp):
         watch_log=WATCH_LOG,
         general_rules=GENERAL_RULES,
     )
-    run_to_log(
-        [
-            "codex", "exec",
-            "--dangerously-bypass-approvals-and-sandbox",
-            "--skip-git-repo-check",
-            "-C", str(ROOT),
-            "--model", args.model,
-            "-c", f"model_reasoning_effort={json.dumps(args.effort)}",
-            "--output-schema", str(schema_path),
-            "--output-last-message", str(verdict_path),
-            prompt,
-        ],
-        check=True,
+    settings = {
+        **IMP_DOOR_SETTINGS,
+        "model": args.model,
+        "config": {"model_reasoning_effort": args.effort},
+    }
+    thread, client = prepare(
+        args.run_id, None, settings=settings, workspace=ROOT, log=sys.stderr
     )
-    verdict = json.loads(verdict_path.read_text(encoding="utf-8"))
+    result = run_turn(
+        client, thread, prompt, output_schema=VERDICT_SCHEMA, log=sys.stderr
+    )
+    client.close()
+    check_finished = result.status == "completed"
+    if not check_finished:
+        raise SystemExit(f"codex check turn {result.status}: {result.error}")
+    verdict = json.loads(result.last_agent_message)
     print(f"verdict: {json.dumps(verdict, indent=2)}", file=sys.stderr)
     return verdict
 
@@ -341,8 +351,7 @@ def main():
         print("codex is not usable; escalating without a check", file=sys.stderr)
         verdict = codex_lapsed_verdict(args.sigil, run)
     else:
-        tmp = Path(tempfile.mkdtemp(prefix=f"{args.run_id}-"))
-        verdict = run_check(args, root_run, tmp)
+        verdict = run_check(args, root_run)
 
     if verdict["needs_human"]:
         open_thread(args, root_run, verdict)

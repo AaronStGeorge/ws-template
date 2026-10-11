@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""Build driver for a ggml-staging-automation workspace.
+"""Build driver for the ggml-staging-automation sourceset.
 
-The workspace is the directory this file lives in; the checkout is its sibling::
+Loading the sourceset symlinks this file into ``sources/`` beside the
+checkout, and it finds the checkout as its sibling there::
 
-    <workspace>/
-      ggml-staging-automation/   # checkout or worktree (hrx-system, llama.cpp are submodules)
-      build.py                   # this file
+    sources/
+      ggml-staging-automation/   # the clone (hrx-system, llama.cpp are submodules)
+      build.py -> ../sourcesets/ggml-staging-automation/assets/build.py
 
 The build itself lives in ``builds.ggml_staging_automation``; run this with the
-workspace-root venv active so that package imports::
+workspace-root venv so that package imports::
 
-    python build.py
-    python build.py --no-vulkan
-    python /tmp/<run-workspace>/build.py -DIREE_HAL_AMDGPU_TARGETS=gfx1151
+    .venv/bin/python sources/build.py
+    .venv/bin/python sources/build.py --no-vulkan
+    .venv/bin/python sources/build.py -DIREE_HAL_AMDGPU_TARGETS=gfx1151
 """
 
 from __future__ import annotations

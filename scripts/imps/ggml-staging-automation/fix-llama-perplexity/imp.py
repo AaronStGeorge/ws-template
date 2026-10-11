@@ -6,34 +6,40 @@ regime. The run's automation commit owns the initial harness and dependency
 pins. Codex owns reproduction, diagnosis and an optional llama.cpp repair,
 using the methodology in that checkout's HRX repository.
 
-The retained workspace contains the prompt, run metadata and Markdown handoff.
-Zero means Codex delivered a report, not that a repair was independently
-verified. Setup, execution and missing-report failures exit nonzero. All
-output goes to stderr for impd's Run log; there is no watcher or retry loop.
+The Run works in a thread (lib/python/threadlib/README.md): a worktree of
+this workspace at .threads/fix-ppl-<run>-<regime> with the
+ggml-staging-automation sourceset loaded, its clone detached at the run's
+automation commit, and Codex hosted on its daemon so the investigation shows
+live in the agent command center. The worktree retains the prompt, run
+metadata and Markdown handoff. Zero means Codex delivered a report, not that
+a repair was independently verified. Setup, execution and missing-report
+failures exit nonzero. All output goes to stderr for impd's Run log; there is
+no watcher or retry loop.
 """
 
 import argparse
 import json
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
-STAGING_URL = "git@github.com:ROCm/ggml-staging-automation.git"
+from threadlib import IMP_DOOR_SETTINGS, prepare, run_turn
+
+SOURCESET = "ggml-staging-automation"
 FORK_PUSH_URL = "git@github.com:AaronStGeorge/llama.cpp.git"
 
 PROMPT = """\
 Reproduce, root-cause, and attempt to fix exactly the {regime} perplexity failure
 for model {model} in {run_url}.
 
-The isolated ggml-staging-automation/ checkout is at the run's automation
-commit with its pinned submodules initialized. source-run.json records the
-run metadata. Preserve these dependency pins for the initial reproduction;
+Your working directory is a worktree of this workspace. Its
+sources/ggml-staging-automation/ checkout is at the run's automation commit
+with its pinned submodules initialized. source-run.json records the run
+metadata. Preserve these dependency pins for the initial reproduction;
 do not switch to current integration HEAD.
 
-Read ggml-staging-automation/hrx-system/loom/docs/src/workflows/agent-driven-kernel-development.md
+Read sources/ggml-staging-automation/hrx-system/loom/docs/src/workflows/agent-driven-kernel-development.md
 and use its approach to investigate and validate any repair. Inspect the run's
 report, raw logs and artifact provenance; reproduce its model, corpus and
 evaluation settings locally, preferably starting with its exact CI binaries.
@@ -42,8 +48,8 @@ alone does not establish numerical correctness.
 
 Read AGENTS.md and the applicable style guides before editing. Before running
 HRX, read docs/hrx-gpu-selection.md and pin a supported GPU as instructed.
-The provided .venv/bin/python build.py builds this isolated checkout. Keep
-experiments and evidence in this workspace, without editing shared sources.
+`.venv/bin/python sources/build.py` builds this checkout. Keep experiments
+and evidence in this worktree, without editing the main checkout's sources.
 
 Limit the repair to this selected failure in llama.cpp. If the cause belongs
 to HRX or the runner environment, report the evidence and remaining work.
@@ -60,7 +66,7 @@ Record the dependency and its HRX commit or PR in the handoff.
 
 After the initial reproduction at the run's original pins, verify the selected
 HRX revision with
-`python3 ggml-staging-automation/llama.cpp/ggml/src/ggml-hrx/tools/check_hrx_revision.py ggml-staging-automation/hrx-system`
+`python3 sources/ggml-staging-automation/llama.cpp/ggml/src/ggml-hrx/tools/check_hrx_revision.py sources/ggml-staging-automation/hrx-system`
 before validating a repair. Staging uses installed packages and bypasses the
 HRX_SOURCE_DIR CMake check, so also establish that the tested HRX and Loom
 libraries were built from that revision. Missing history or incompatible pins
@@ -79,9 +85,9 @@ def run_to_log(argv, **kwargs):
     return subprocess.run(argv, stdout=sys.stderr.fileno(), **kwargs)
 
 
-def prepare(workspace, root, source_sha):
-    clone = workspace / "ggml-staging-automation"
-    run_to_log(["git", "clone", STAGING_URL, str(clone)], check=True)
+def prepare_checkout(workspace, root, source_sha):
+    """Move the loaded clone onto the run's commit and guard its remotes."""
+    clone = workspace / "sources" / "ggml-staging-automation"
     run_to_log(["git", "checkout", "--detach", source_sha], cwd=clone, check=True)
     run_to_log(["git", "submodule", "update", "--init", "--recursive"], cwd=clone, check=True)
     llama = clone / "llama.cpp"
@@ -93,10 +99,10 @@ def prepare(workspace, root, source_sha):
     for checkout in (clone, clone / "hrx-system"):
         run_to_log(["git", "remote", "set-url", "--push", "origin", "push-disabled"],
                    cwd=checkout, check=True)
-    for name in ("docs", ".venv", "AGENTS.md"):
-        (workspace / name).symlink_to(root / name)
-    here = Path(__file__).resolve().parent
-    shutil.copy2(here.parent / "build.py", workspace / "build.py")
+    # The worktree is a checkout of this workspace, so docs/ and AGENTS.md
+    # are in place; the venv is shared because Codex's daemon runs the
+    # agent's shell without direnv. build.py is the sourceset's asset.
+    (workspace / ".venv").symlink_to(root / ".venv")
 
 
 def main():
@@ -121,19 +127,28 @@ def main():
     source_sha = source_run["head_sha"]
     if re.fullmatch(r"[0-9a-f]{40}", source_sha) is None:
         raise ValueError("source run has an invalid head_sha")
-    workspace = Path(tempfile.mkdtemp(prefix=f"fix-ppl-{number}-{args.regime}-"))
+    # Named as the README's launch example names the Run Id. A worktree
+    # left by an earlier Run of the same run and regime makes this fail;
+    # remove it (`git worktree remove .threads/<name>`) before relaunching.
+    thread, client = prepare(
+        f"fix-ppl-{number}-{args.regime}", SOURCESET,
+        settings=IMP_DOOR_SETTINGS, log=sys.stderr,
+    )
+    workspace = thread.worktree
     print(f"run workspace: {workspace}", file=sys.stderr)
     (workspace / "source-run.json").write_text(json.dumps(source_run, indent=2) + "\n")
-    prepare(workspace, Path(__file__).resolve().parents[4], source_sha)
+    prepare_checkout(workspace, Path(__file__).resolve().parents[4], source_sha)
     prompt = PROMPT.format(model=args.model, regime=args.regime, run_url=args.run_url, fork_url=FORK_PUSH_URL)
     (workspace / "prompt.txt").write_text(prompt)
-    handoff_path = workspace / "handoff.md"
-    run_to_log(["codex", "exec", "--dangerously-bypass-approvals-and-sandbox",
-                "--skip-git-repo-check", "-C", str(workspace),
-                "--output-last-message", str(handoff_path), prompt], check=True)
-    handoff = handoff_path.read_text()
+    result = run_turn(client, thread, prompt, log=sys.stderr)
+    client.close()
+    if result.status != "completed":
+        raise ValueError(f"codex turn {result.status}: {result.error}")
+    handoff = result.last_agent_message or ""
     if not handoff.strip():
         raise ValueError("Codex did not produce a handoff report")
+    handoff_path = workspace / "handoff.md"
+    handoff_path.write_text(handoff)
     print(handoff, file=sys.stderr)
     print(f"handoff report: {handoff_path}", file=sys.stderr)
 
