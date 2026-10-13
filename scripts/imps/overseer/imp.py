@@ -66,12 +66,14 @@ VERDICT_SCHEMA = {
         "headline": {
             "type": "string",
             "description": "One line, under 200 characters: what the human "
-            "would act on. Empty when needs_human is false.",
+            "would act on. Name a pull request by its full URL, never "
+            "`#N`. Empty when needs_human is false.",
         },
         "findings": {
             "type": "string",
             "description": "Plain-text summary of everything checked and "
-            "what was found, with PR URLs, Run Ids and log paths.",
+            "what was found, with full PR URLs (never `#N`), Run Ids and "
+            "log paths.",
         },
     },
     "required": ["needs_human", "headline", "findings"],
@@ -146,6 +148,11 @@ characters that says what the human would act on (empty if nothing); and
 `findings` — a plain-text summary of what you checked and what you
 found, with URLs, Run Ids and log paths, written for a second agent who
 will pick up from it.
+
+Name every pull request by its full URL, in the headline and in the
+findings. The human reads the headline on a phone, where `#141` opens
+nothing and `https://github.com/owner/repo/pull/141` does. The URL is
+most of the headline's budget; spend the rest on the action.
 """
 
 OPEN_PROMPT = """\
@@ -156,6 +163,12 @@ the PushNotification tool — a headline under 200 characters that says
 what the human would act on — and wait. The human will continue this
 session from their phone. CHANGE NOTHING (no commits, pushes, PR edits,
 merges, relaunches, arming) until they tell you to.
+
+Name every pull request by its full URL, in the notification and in
+every reply after it: on a phone `#141` opens nothing and
+`https://github.com/owner/repo/pull/141` does. Lead the notification
+with the action, then the URL; if two URLs will not fit under 200
+characters, give the one the human acts on first.
 
 # The check's verdict
 
