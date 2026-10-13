@@ -229,6 +229,15 @@ not `IMP_DOOR_SETTINGS`. Launcher output goes to stderr, leaving stdout for
 MCP. Failed worktrees remain for inspection; an opening-turn failure reports
 the already-created thread ID and path. An occupied name is never replaced.
 
+When a parent is supplied, the opening turn is a short handshake that replies
+`WORKSPACE_THREAD_READY` without starting the assignment. The orchestrator
+waits for that turn to finish, then uses native `send_message_to_thread` to
+start the assignment. On this installation, the app attaches its native
+thread tools when it starts a turn on an idle daemon-created thread; sending
+the first native message while the initial turn is active did not attach
+them. Without a parent, work starts immediately. No extra server or watcher
+is needed for this handoff.
+
 [The workspace-thread skill](../../../.agents/skills/workspace-thread/SKILL.md)
 explains creation and coordination. Codex's built-in `read_thread`,
 `send_message_to_thread`, and `wait_threads` accept the returned thread ID;
