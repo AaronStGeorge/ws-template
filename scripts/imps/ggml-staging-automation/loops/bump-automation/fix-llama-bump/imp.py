@@ -127,6 +127,13 @@ Working rules:
   if the floor cannot be met within the staircase rules, stop and hand off.
   Historical llama.cpp revisions without the file have no recorded floor;
   introduce it with the required commit when a repair adds an HRX dependency.
+  When a llama.cpp fix leaves the floor unchanged, prove it: build Loom's
+  C library (`loomc_shared`) from an hrx-system worktree at the floor
+  commit, compile the repaired kernels against it with
+  `ggml-hrx-compile-kernel` under `LD_LIBRARY_PATH` for every
+  specialization CI failed on, and record the case count and outcome in
+  the handoff. A fix that fails there needs the floor raised, not the
+  claim softened.
 - What is already fixed: the automation's bump pins llama.cpp at the
   upstream (AMD-Ecosystem `hrx-graph-develop-v2`) head as of bump time. A
   break whose fix merged upstream BEFORE that pin is already handled —
