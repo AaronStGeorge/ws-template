@@ -57,7 +57,7 @@ word is `impd`.
 
 **Door** — a way of asking for a new thread. Three exist: the human door
 (`thread new`, ending in an interactive session), the agent door
-(`thread new --prompt`, starting the first turn and returning), and the
+(`thread new --prompt` or MCP, starting the first turn and returning), and the
 Imp door (the library, blocking until the turn is done).
 
 ## What threadlib commits to
@@ -177,8 +177,9 @@ only Codex's own door can make one, so a bead id cannot enter through them.
 
 - One library, three doors. The library is the launcher; `thread` is a
   thin executable over it for the human and agent doors; an Imp imports it.
-  No MCP server until a shell-less client needs one; the skill that serves
-  agents is one line telling them to run `thread new ... --prompt`.
+  The MCP server adds a structured creation tool for agents, using the same
+  assignment resolution and launcher as the CLI. Codex's native tools own
+  reading, messaging, and waiting; the workspace does not duplicate them.
 - The Imp door is a Run through `impd`, so an Imp's thread has a Run Id and
   a log as every Run does. Imps have no beads to start with, so an Imp's
   thread is named after its Run Id and the Imp names the sourceset itself.
@@ -204,6 +205,38 @@ only Codex's own door can make one, so a bead id cannot enter through them.
   load can destroy work; the thread path always targets an empty
   `sources/` and carries no guard that cannot fire.
 
-### Open
+## MCP and the workspace-thread skill
 
-- What a thread is told about beads beyond "work on bead `<id>`".
+Install the workspace package into its venv, then register the stdio server
+with absolute paths to the main checkout (substitute your checkout path):
+
+```sh
+.venv/bin/python -m pip install -e lib/python --config-settings editable_mode=compat
+codex mcp add workspace_threads -- /absolute/ws/.venv/bin/thread-mcp --workspace /absolute/ws
+```
+
+The server exposes exactly one tool, `create_workspace_thread`. Give either
+`bead_id`, or `name` with a nonempty `prompt` and optional `sourceset`.
+A bead provides the sourceset and opening assignment; `prompt` adds context.
+`parent_thread_id` adds a return address and tells the worker to report
+progress, blockers, and completion through Codex's native messaging tool.
+The result contains `thread_id`, `turn_id`, `name`, and `worktree` after the
+opening turn starts. The server is bound to the main workspace, so calls
+from its child worktrees still create siblings in the same `.threads/`.
+
+The MCP door uses ordinary Codex defaults, just like the CLI agent door,
+not `IMP_DOOR_SETTINGS`. Launcher output goes to stderr, leaving stdout for
+MCP. Failed worktrees remain for inspection; an opening-turn failure reports
+the already-created thread ID and path. An occupied name is never replaced.
+
+[The workspace-thread skill](../../../.agents/skills/workspace-thread/SKILL.md)
+explains creation and coordination. Codex's built-in `read_thread`,
+`send_message_to_thread`, and `wait_threads` accept the returned thread ID;
+they were verified against a CLI-launched thread on this installation.
+The orchestrator creates and tracks beads and closes them after reviewing
+the worker's evidence. The launcher does not mutate issue state.
+
+After registering, reload MCP configuration or restart/resume the calling
+conversation if necessary. Verify tool visibility before using a new server.
+Fresh worktrees use workspace HEAD and fresh repository clones: commit needed
+workspace changes and publish needed source changes before launch.
