@@ -19,7 +19,7 @@ from unittest.mock import Mock, patch
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from threadlib import assignment
+from threadlib import assignment, cli
 from threadlib.mcp import create
 
 
@@ -119,6 +119,17 @@ class LaunchTests(unittest.TestCase):
     def test_cli_assignment_still_allows_interactive_named_launch(self) -> None:
         task = assignment.resolve(self.workspace, name="interactive")
         self.assertIsNone(task.prompt)
+
+    def test_cli_agent_door_uses_shared_assignment_and_launcher(self) -> None:
+        with patch("threadlib.cli.main_checkout", return_value=self.workspace):
+            result = cli.main([
+                "new", "--name", "cli-task", "--sourceset", "sample",
+                "--prompt", "Check the source",
+            ])
+        self.assertEqual(result, 0)
+        self.assertTrue((self.workspace / ".threads/cli-task/sources/sample/README.md").is_file())
+        self.client.start_turn.assert_called_once_with("thread-id", "Check the source", None)
+        self.client.close.assert_called_once()
 
     def test_stdio_discovery_and_error_response(self) -> None:
         async def check() -> None:
