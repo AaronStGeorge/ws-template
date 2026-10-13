@@ -207,16 +207,22 @@ only Codex's own door can make one, so a bead id cannot enter through them.
 
 ## MCP and the workspace-thread skill
 
-Install the workspace package into its venv, then register the stdio server
-with absolute paths to the main checkout (substitute your checkout path):
+The checked-in `.codex/config.toml` registers the server for this trusted
+workspace. Codex loads it automatically; no `codex mcp add` or user-level
+configuration is needed. Its launcher resolves the main checkout through
+Git, so the same configuration works in linked worktrees and at different
+checkout paths. It uses the main checkout's virtualenv.
+
+Entering the main checkout with direnv installs the MCP dependencies when
+needed. Without direnv, install the workspace package manually:
 
 ```sh
 .venv/bin/python -m pip install -e lib/python --config-settings editable_mode=compat
-codex mcp add workspace_threads -- /absolute/ws/.venv/bin/thread-mcp --workspace /absolute/ws
 ```
 
-Set `tool_timeout_sec = 600` in that server's MCP configuration so full
-sourceset clones can finish before the client times out.
+The project configuration sets `tool_timeout_sec = 600` so full sourceset
+clones can finish before the client times out. Shell setup also works when
+Codex is not installed; install Codex when you want to use the tool.
 
 The server exposes exactly one tool, `create_workspace_thread`. Give either
 `bead_id`, or `name` with a nonempty `prompt` and optional `sourceset`.
