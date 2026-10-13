@@ -130,6 +130,10 @@ Working rules:
   if the floor cannot be met within the staircase rules, stop and hand off.
   Historical llama.cpp revisions without the file have no recorded floor;
   introduce it with the required commit when a repair adds an HRX dependency.
+  When a fix leaves the floor unchanged, demonstrate that the fix works
+  against HRX at the floor commit, not just against the bump's target,
+  and record what you ran in the handoff. Never assert it from the
+  syntax.
 - What is already fixed: the automation's bump pins llama.cpp at the
   upstream (AMD-Ecosystem `hrx-graph-develop-v2`) head as of bump time. A
   break whose fix merged upstream BEFORE that pin is already handled —
