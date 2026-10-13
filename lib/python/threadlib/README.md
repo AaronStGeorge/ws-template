@@ -215,6 +215,9 @@ with absolute paths to the main checkout (substitute your checkout path):
 codex mcp add workspace_threads -- /absolute/ws/.venv/bin/thread-mcp --workspace /absolute/ws
 ```
 
+Set `tool_timeout_sec = 600` in that server's MCP configuration so full
+sourceset clones can finish before the client times out.
+
 The server exposes exactly one tool, `create_workspace_thread`. Give either
 `bead_id`, or `name` with a nonempty `prompt` and optional `sourceset`.
 A bead provides the sourceset and opening assignment; `prompt` adds context.
