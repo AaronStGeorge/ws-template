@@ -48,6 +48,17 @@ def create(
             "and concrete result or artifact references. Do not close your "
             "bead yourself; the orchestrator reviews and closes it."
         )
+        # The app attaches its native thread tools when it starts a turn on
+        # an idle daemon-created thread. Keep this first turn idle-ready so
+        # an orchestrator's first native message can perform that handoff.
+        opening = (
+            "Workspace thread startup handshake. The assignment below is for "
+            "your NEXT turn, after the orchestrator attaches native thread tools. "
+            "For this turn, do not run commands or begin the assignment. Reply "
+            "exactly WORKSPACE_THREAD_READY and finish. The orchestrator will "
+            "wait for this turn to finish and send a native follow-up to begin.\n\n"
+            f"Assignment for the next turn:\n{opening}"
+        )
     thread, client = launch.prepare(task.name, task.sourceset, workspace=workspace)
     try:
         turn_id = launch.start_turn(client, thread, opening)
@@ -82,8 +93,10 @@ def make_server(workspace: Path) -> FastMCP:
         Give bead_id OR name. A bead supplies its sourceset label and opening
         assignment; a named launch requires prompt and may specify sourceset.
         Pass the calling thread's ID as parent_thread_id for replies. Uses
-        ordinary Codex defaults. After creation, use Codex's built-in thread
-        tools to read, message, and wait; creation does not wait for completion.
+        ordinary Codex defaults. With a parent, the first turn is a short
+        startup handshake: wait for it to finish, then use the built-in
+        send_message_to_thread to begin the assignment with native tools.
+        Use built-in thread tools to read, message, and wait afterward.
         An existing worktree is refused, never replaced or reused.
         """
         return create(
