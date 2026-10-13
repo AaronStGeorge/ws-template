@@ -19,10 +19,8 @@ import argparse
 import subprocess
 import sys
 
-from . import bead, launch
-from .workspace import main_checkout, validate_name
-
-BEAD_PROMPT = "Work on bead {bead_id}. Read it with `br show {bead_id} --json` first."
+from . import assignment, launch
+from .workspace import main_checkout
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -42,7 +40,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     has_name = args.name is not None
     if has_bead == has_name:
         new.error("give a bead id or --name, not both and not neither")
-    if has_bead and args.sourceset is not None:
+    has_sourceset = args.sourceset is not None
+    overrides_bead_sourceset = has_bead and has_sourceset
+    if overrides_bead_sourceset:
         new.error("--sourceset comes from the bead's label when a bead is given")
     return args
 
@@ -51,18 +51,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     workspace = main_checkout()
     try:
-        if args.bead is not None:
-            name = validate_name(args.bead)
-            sourceset_name = bead.sourceset_label(workspace, name)
-            prompt = BEAD_PROMPT.format(bead_id=name)
-        else:
-            name = validate_name(args.name)
-            sourceset_name = args.sourceset
-            prompt = None
-        if args.prompt is not None:
-            prompt = args.prompt if prompt is None else f"{prompt}\n\n{args.prompt}"
-
-        thread, client = launch.prepare(name, sourceset_name, workspace=workspace)
+        task = assignment.resolve(
+            workspace, bead_id=args.bead, name=args.name,
+            sourceset=args.sourceset, prompt=args.prompt,
+        )
+        thread, client = launch.prepare(task.name, task.sourceset, workspace=workspace)
     except (ValueError, LookupError, FileNotFoundError, FileExistsError) as error:
         print(f"thread new: {error}", file=sys.stderr)
         return 1
@@ -72,13 +65,15 @@ def main(argv: list[str] | None = None) -> int:
 
     is_agent_door = args.prompt is not None
     if is_agent_door:
-        launch.start_turn(client, thread, prompt)
-        client.close()
+        try:
+            launch.start_turn(client, thread, task.prompt)
+        finally:
+            client.close()
         print(thread.name)
         return 0
 
     client.close()
-    launch.attach(thread, prompt)
+    launch.attach(thread, task.prompt)
     return 0  # unreachable: attach replaces the process
 
 
