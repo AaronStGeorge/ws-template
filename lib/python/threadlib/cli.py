@@ -34,17 +34,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--prompt",
         help="agent door: start the first turn with this prompt and return",
     )
-    args = parser.parse_args(argv)
-
-    has_bead = args.bead is not None
-    has_name = args.name is not None
-    if has_bead == has_name:
-        new.error("give a bead id or --name, not both and not neither")
-    has_sourceset = args.sourceset is not None
-    overrides_bead_sourceset = has_bead and has_sourceset
-    if overrides_bead_sourceset:
-        new.error("--sourceset comes from the bead's label when a bead is given")
-    return args
+    return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
