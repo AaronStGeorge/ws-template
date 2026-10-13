@@ -93,9 +93,12 @@ HANDOFF_SCHEMA = {
 
 # The manifest-expectations rule answers fix-bump-pr-82: CI was red on
 # perplexity XPASSes, and the Run dropped the stale `fail` expectations
-# but left their paired lemonade-benchmark `skip`s, so the PR went green
-# with three healthy models still unbenchmarked. Green CI cannot catch
-# that — a skipped check never fails — so the prompt has to say it.
+# but left their paired lemonade-benchmark relaxations, so the PR went
+# green with three healthy models still unbenchmarked. Green CI cannot
+# catch that — a report-only check never fails — so the prompt has to say
+# it. The relaxation is `report-only`, not `skip`: staging PR
+# https://github.com/ROCm/ggml-staging-automation/pull/95 removed the
+# per-model skip so the model still runs and its result stays visible.
 #
 # The known-bad-runners rule answers fix-bump-pr-92: the benchmark failed
 # on halobox-b13, the agent's rerun landed there again, and the Run ended
@@ -225,15 +228,17 @@ Working rules:
   failure that repeats on an unlisted runner is real.
 - Manifest expectations: `benchmarks/hrx/model_manifest.json` records,
   per model under `hrx.expected_results`, the checks not expected to
-  pass. A model whose perplexity is expected to fail carries
-  `"perplexity": "fail"` together with `"lemonade-benchmark": "skip"`;
-  the skip stands only while perplexity fails. When a model's perplexity
-  now passes (CI reports it as XPASS), remove BOTH entries in the same
-  commit, so lemonade-benchmark runs for that model again. Removing the
-  `fail` alone turns CI green while the model stays unbenchmarked. An
-  omitted check expects a pass: when the removal leaves `hrx` empty,
-  delete the `hrx` block. The re-enabled lemonade-benchmark must pass in
-  the PR's CI like any other check.
+  pass. The values are `pass`, `fail`, and `report-only`; there is no
+  `skip`, and you do not add one. A model whose perplexity is expected
+  to fail carries `"perplexity": "fail"`; if its HRX throughput also
+  fails, add `"lemonade-benchmark": "report-only"`, which keeps the
+  measurement visible without failing CI. When a model's perplexity now
+  passes (CI reports it as XPASS), remove BOTH entries in the same
+  commit, so lemonade-benchmark is enforced for that model again.
+  Removing the `fail` alone turns CI green while the model's throughput
+  stays unenforced. An omitted check expects a pass: when the removal
+  leaves `hrx` empty, delete the `hrx` block. The re-enabled
+  lemonade-benchmark must pass in the PR's CI like any other check.
 - Pushing to the PR branch and to the personal fork is standing policy here,
   pre-authorized; contribution-policy files in the repos are no reason to
   pause these pushes.

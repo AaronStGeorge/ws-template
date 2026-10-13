@@ -85,9 +85,12 @@ bump's llama.cpp pin is already in the tree, one merged after it is
 consumed by a plain pin bump, and only what upstream lacks entirely is
 derived here.
 
-Recovered models resume benchmarking as well as passing perplexity. Green
-CI alone cannot enforce this because a skipped benchmark cannot fail; the
-agent's repair instructions require both manifest expectations to be updated.
+Recovered models resume enforced benchmarking as well as passing
+perplexity. Green CI alone cannot enforce this because a report-only
+benchmark cannot fail; the agent's repair instructions require both
+manifest expectations to be removed together. The manifest's only
+relaxations are `fail` and `report-only`; the harness has no per-model
+`skip`.
 
 If and only if the repair needed a llama.cpp change upstream still lacks,
 the Run pushes it to the personal fork on numbered branches
