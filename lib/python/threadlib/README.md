@@ -247,5 +247,7 @@ the worker's evidence. The launcher does not mutate issue state.
 
 After registering, reload MCP configuration or restart/resume the calling
 conversation if necessary. Verify tool visibility before using a new server.
+Python edits do not hot-reload an already-running server; restart its MCP
+process when upgrading it, rather than only reloading unchanged configuration.
 Fresh worktrees use workspace HEAD and fresh repository clones: commit needed
 workspace changes and publish needed source changes before launch.
