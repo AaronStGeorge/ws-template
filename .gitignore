@@ -6,6 +6,9 @@ __pycache__/
 # Build directories, usually under sources/projectX/build
 build/
 
+# Downloaded local benchmark models and corpora
+/models/
+
 # Ignore devcontainers, usually machine specific
 .devcontainer
 
