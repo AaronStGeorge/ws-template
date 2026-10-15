@@ -141,7 +141,11 @@ Every door runs the same steps; only the last differs.
    `sources/`).
 5. **Thread.** Ensure Codex's daemon is up, connect to its socket, send
    `thread/start` with the worktree as cwd and the door's approval and
-   sandbox settings, then `thread/name/set`. The human door passes
+   sandbox settings, then `thread/name/set`, then a no-op
+   `thread/section/move` so the daemon writes the thread's rollout file:
+   it otherwise writes nothing until a turn lands, and `codex resume`
+   reads from disk, so a thread with no turn yet fails to resume
+   (codex.py, `persist_thread`, has what else was tried). The human door passes
    nothing and gets the user's own Codex defaults; the Imp door sets
    approvals to never and the sandbox off, as the imps run today, because
    a thread that paused for approval would hang with no one watching and

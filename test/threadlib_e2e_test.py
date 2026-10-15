@@ -163,6 +163,10 @@ class DoorTests(unittest.TestCase):
         self.assertEqual(Path.cwd(), worktree)
         thread = self.assert_thread_on_daemon(thread_id, bead_id, worktree)
         self.assertEqual(thread.get("turns") or [], [], "the human door starts no turn")
+        # `codex resume` reads the rollout from disk; with no turn yet, only
+        # the launcher's persist step puts it there.
+        rollout = Path(thread["path"] or "")
+        self.assertTrue(rollout.is_file() and rollout.stat().st_size > 0, f"no rollout on disk for {thread_id}: {thread.get('path')}")
 
     def test_agent_door_runs_a_turn_on_a_free_form_title_and_prints_the_id(self) -> None:
         title = "e2e: the [agent] door, with spaces & punctuation"

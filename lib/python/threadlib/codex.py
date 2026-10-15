@@ -9,9 +9,9 @@ JSON-RPC 2.0 over WebSocket; ``codex app-server daemon start`` starts it when
 it is not running and is a no-op when it is.
 
 The protocol surface used here is the v2 app-server API: ``initialize``,
-``thread/start``, ``thread/name/set``, ``turn/start``, and the ``turn/*``,
-``item/*`` and ``error`` notifications a turn emits. Verified against
-codex-cli 0.162.1.
+``thread/start``, ``thread/name/set``, ``thread/section/move`` (see
+``persist_thread``), ``turn/start``, and the ``turn/*``, ``item/*`` and
+``error`` notifications a turn emits. Verified against codex-cli 0.162.1.
 """
 
 from __future__ import annotations
@@ -135,6 +135,21 @@ class Client:
 
     def set_thread_name(self, thread_id: str, name: str) -> None:
         self.request("thread/name/set", {"threadId": thread_id, "name": name})
+
+    def persist_thread(self, thread_id: str) -> None:
+        """Make the daemon write the thread's rollout file now, with no turn.
+
+        The daemon keeps a new thread in memory and writes its rollout only
+        when something lands in it, and ``codex resume`` reads the rollout
+        from disk, so a thread with no turn yet fails to resume with "no
+        rollout found". Moving the thread out of its (absent) section is the
+        one call found that writes the file and changes nothing else:
+        ``thread/name/set``, ``thread/unsubscribe`` and
+        ``thread/metadata/update`` leave the file unwritten, and
+        ``thread/goal/set`` writes it but the resumed TUI then pursues the
+        goal as an instruction. Found on codex-cli 0.162.1.
+        """
+        self.request("thread/section/move", {"threadId": thread_id, "sectionId": None})
 
     def start_turn(
         self, thread_id: str, prompt: str, output_schema: dict[str, Any] | None = None
