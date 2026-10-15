@@ -76,6 +76,9 @@ def prepare(
     client = Client.connect()
     document = client.start_thread(path, settings or {})
     client.set_thread_name(document["id"], name)
+    # Written to disk before any door returns, so `codex resume <id>` works
+    # on a thread whose first turn has not happened yet (the human door's).
+    client.persist_thread(document["id"])
     print(f"thread {name}: {document['id']} in {path}", file=log)
     return Thread(name, slug, path, document["id"]), client
 
