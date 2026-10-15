@@ -16,7 +16,7 @@ from .launch import (
     start_turn,
 )
 from .sourceset import Sourceset, load_sourceset, read_sourceset
-from .workspace import main_checkout, validate_name
+from .workspace import main_checkout
 
 __all__ = [
     "IMP_DOOR_SETTINGS",
@@ -30,5 +30,4 @@ __all__ = [
     "read_sourceset",
     "run_turn",
     "start_turn",
-    "validate_name",
 ]

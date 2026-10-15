@@ -22,7 +22,7 @@ from typing import Any
 
 from . import codex, sourceset as sourcesets, worktree
 from .codex import Client, TurnResult
-from .workspace import main_checkout, validate_name
+from .workspace import main_checkout, slugify
 
 # The Imp door's thread settings: no approvals, no sandbox, as the imps ran
 # under `codex exec --dangerously-bypass-approvals-and-sandbox`. A thread
@@ -37,7 +37,8 @@ IMP_DOOR_SETTINGS: dict[str, Any] = {
 
 @dataclass(frozen=True)
 class Thread:
-    name: str
+    name: str  # the title, as Codex shows it
+    slug: str  # the worktree directory name under .threads/
     worktree: Path
     thread_id: str
 
@@ -51,17 +52,22 @@ def prepare(
 ) -> tuple[Thread, Client]:
     """Steps 1 to 5; returns the thread and the daemon connection that made it.
 
-    ``sourceset_name`` None leaves ``sources/`` empty, for threads that work
-    on the workspace itself (the overseer's checks). ``log`` receives git
-    and daemon-start output. The connection is returned so a door can send
-    the opening turn on it; the human door closes it unused.
+    ``name`` is the thread's title, free text that Codex shows as is; its
+    slug names the worktree. For a bead id or an imp Run Id the two are
+    equal. ``sourceset_name`` None leaves ``sources/`` empty, for threads
+    that work on the workspace itself (the overseer's checks). ``log``
+    receives git and daemon-start output. The connection is returned so a
+    door can send the opening turn on it; the human door closes it unused.
     """
-    validate_name(name)
+    # The title's provenance boundary: strip once for the Codex name, and
+    # slugify once for the worktree, before anything is cut.
+    name = name.strip()
+    slug = slugify(name)
     ws = workspace if workspace is not None else main_checkout()
     chosen = sourcesets.read_sourceset(ws, sourceset_name) if sourceset_name else None
 
     print(f"thread {name}: cutting worktree", file=log)
-    path = worktree.create(ws, name, log)
+    path = worktree.create(ws, name, slug, log)
     if chosen is not None:
         print(f"thread {name}: loading sourceset {chosen.name}", file=log)
         sourcesets.load_sourceset(chosen, path, log)
@@ -71,7 +77,7 @@ def prepare(
     document = client.start_thread(path, settings or {})
     client.set_thread_name(document["id"], name)
     print(f"thread {name}: {document['id']} in {path}", file=log)
-    return Thread(name, path, document["id"]), client
+    return Thread(name, slug, path, document["id"]), client
 
 
 def attach(thread: Thread, prompt: str | None = None) -> None:
