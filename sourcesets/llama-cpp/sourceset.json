@@ -4,9 +4,6 @@
       "url": "git@github.com:AMD-Ecosystem/llama.cpp.git",
       "ref": "hrx-graph-develop-v2"
     },
-    {
-      "url": "git@github.com:ROCm/hrx-system.git",
-      "ref": "main"
-    }
+    {"url": "git@github.com:ROCm/hrx-system.git"}
   ]
 }

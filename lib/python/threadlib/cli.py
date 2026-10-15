@@ -3,13 +3,13 @@
 ::
 
     thread new <bead-id>                          # named after the bead; sourceset from its label
-    thread new --name <slug> [--sourceset <s>]    # no bead
+    thread new --name <title> [--sourceset <s>]   # no bead
     thread new ... --prompt TEXT                  # agent door: start the first turn and return
 
 Without ``--prompt`` the command ends as an interactive ``codex`` on the new
 thread, inside its worktree. With it, the thread's first turn starts with
-that prompt and the command prints the thread's name and returns; follow up
-with ``codex queue --thread <name>`` or by opening the thread. The Imp door
+that prompt and the command prints the thread's id and returns; follow up
+with ``codex queue --thread <id>`` or by opening the thread. The Imp door
 is the library (launch.py), not this command.
 """
 
@@ -28,7 +28,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     verbs = parser.add_subparsers(dest="verb", required=True)
     new = verbs.add_parser("new", help="launch a new thread in its own worktree")
     new.add_argument("bead", nargs="?", help="bead id; names the thread and picks its sourceset")
-    new.add_argument("--name", help="thread name when there is no bead")
+    new.add_argument(
+        "--name", help="thread title when there is no bead; its slug names the worktree"
+    )
     new.add_argument("--sourceset", help="sourceset to load when there is no bead")
     new.add_argument(
         "--prompt",
@@ -59,7 +61,10 @@ def main(argv: list[str] | None = None) -> int:
             launch.start_turn(client, thread, task.prompt)
         finally:
             client.close()
-        print(thread.name)
+        # The id, not the title: a title can be reused once its worktree is
+        # removed, and the id is what `codex queue --thread` and `codex
+        # resume` both take without ambiguity.
+        print(thread.thread_id)
         return 0
 
     client.close()

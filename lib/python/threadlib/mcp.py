@@ -92,6 +92,8 @@ def make_server(workspace: Path) -> FastMCP:
 
         Give bead_id OR name. A bead supplies its sourceset label and opening
         assignment; a named launch requires prompt and may specify sourceset.
+        name is a free-text title; its slug names the worktree, and an
+        existing slug is refused.
         Pass the calling thread's ID as parent_thread_id for replies. Uses
         ordinary Codex defaults. With a parent, the first turn is a short
         startup handshake: wait for it to finish, then use the built-in

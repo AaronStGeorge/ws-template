@@ -66,8 +66,8 @@ The human door:
 
 ```
 thread new <bead-id>                          # named after the bead; sourceset from its label
-thread new --name <slug> [--sourceset <s>]    # no bead; without a sourceset sources/ stays empty
-thread new <bead-id-or-flags> --prompt TEXT   # agent door: start the first turn, print the name, return
+thread new --name <title> [--sourceset <s>]   # no bead; without a sourceset sources/ stays empty
+thread new <bead-id-or-flags> --prompt TEXT   # agent door: start the first turn, print the thread id, return
 ```
 
 Without `--prompt`, either form ends with an interactive `codex` attached
@@ -75,8 +75,8 @@ to the new thread, inside the new worktree, with the thread already named;
 on a bead, the opening prompt ("Work on bead `<id>`...") is typed for you
 as the first turn. With `--prompt`, the agent door, the thread's first turn
 is started with that prompt (after the bead prompt, when there is a bead)
-and the command returns at once, printing the thread's name; the caller
-follows up with `codex queue --thread <name>` or by opening the thread.
+and the command returns at once, printing the thread's id; the caller
+follows up with `codex queue --thread <id>` or by opening the thread.
 The Imp door is the library: `prepare(name, sourceset, settings)` runs the
 shared steps and returns the thread and the daemon connection, and
 `run_turn(client, thread, prompt, output_schema)` sends the opening prompt,
@@ -87,23 +87,27 @@ adds a `model` or `config` to it when its Manifest configures one.
 
 What every door guarantees once it returns:
 
-- A detached worktree of the workspace exists at `.threads/<name>`, with
+- A detached worktree of the workspace exists at `.threads/<slug>`, with
   `sources/` holding the sourceset's repositories and assets, or empty
   when no sourceset was named.
-- A thread named `<name>` exists on Codex's daemon with the worktree as its
-  cwd, so it is a row in the command center from its first turn and
-  `codex resume <name>` and `codex queue --thread <name>` both reach it.
+- A thread named with the title exists on Codex's daemon with the worktree
+  as its cwd, so it is a row in the command center from its first turn and
+  `codex resume` and `codex queue --thread` both reach it, by id or by
+  exact name.
 - With a bead, the thread's opening prompt says to work on that bead. That
   is the whole bead process for now; claiming, branching, handoff and close
   are deliberately unspecified until use shows what they should be.
 
-A name that already has a worktree is refused, with the `git worktree
-remove` that frees it: a thread name is also a Codex thread name, and two
-threads sharing a checkout would share each other's half-done work. This
-is what an Imp hits when a Run is relaunched for the same PR; removing the
-old worktree is part of the relaunch. Names are the Run Id slug shape
-(lowercase, digits, hyphens, at most 64 characters), checked where they
-enter: the command line, and a bead id read back from `br`.
+A title is any text with at least one ASCII letter or digit. Its slug,
+lowercase with runs of anything else collapsed to one hyphen and at most
+128 characters, names the worktree, so two titles with the same slug
+collide: the second is refused with the slug that collided and the `git
+worktree remove` that frees it, because two threads sharing a checkout
+would share each other's half-done work. This is what an Imp hits when a
+Run is relaunched for the same PR; removing the old worktree is part of the
+relaunch. A bead id or a Run Id is already a slug and is its own; the bead
+id is still checked strictly where it is read back from `br`, because it
+goes verbatim into `br show`.
 
 Failures before the thread exists (no such sourceset, a bead without a
 `sourceset:` label, a bead `br` does not know, a worktree in the way) exit
@@ -116,10 +120,11 @@ failed is left in place for inspection, like a failed Run's log.
 
 Every door runs the same steps; only the last differs.
 
-1. **Name.** The bead id, or the given slug. Thread and worktree carry it.
+1. **Name.** The bead id, or the given title. The Codex thread carries the
+   title; the worktree carries its slug.
 2. **Worktree.** `git worktree add --detach` of the workspace at
-   `.threads/<name>` inside the clone, gitignored like `.imp/`, so a
-   thread's worktree is spelled the same as its thread and its bead, and
+   `.threads/<slug>` inside the clone, gitignored like `.imp/`, so a
+   thread's worktree is spelled after its thread and its bead, and
    everything about a workspace stays in the workspace. The workspace
    worktree takes no branch; only sourceset checkouts would, and that is
    part of the open bead process. `sources/` is gitignored, so it starts
@@ -143,7 +148,7 @@ Every door runs the same steps; only the last differs.
    the imp design record's constraints ask for no hardening. Both doors do this, which is
    what makes their threads indistinguishable in the command center.
 6. **Door.** Human: exec `codex resume <thread>` in the worktree. Agent:
-   send `turn/start` with the prompt, print the thread's name, return.
+   send `turn/start` with the prompt, print the thread's id, return.
    Imp: send `turn/start` with the prompt, stream the thread's events into
    the Run log, return the turn's outcome. In every case the thread stays
    on the daemon afterwards as a Ready row.
@@ -229,14 +234,14 @@ The server exposes exactly one tool, `create_workspace_thread`. Give either
 A bead provides the sourceset and opening assignment; `prompt` adds context.
 `parent_thread_id` adds a return address and tells the worker to report
 progress, blockers, and completion through Codex's native messaging tool.
-The result contains `thread_id`, `turn_id`, `name`, and `worktree` after the
-opening turn starts. The server is bound to the main workspace, so calls
+The result contains `thread_id`, `turn_id`, `name` (the typed title), and
+`worktree` (ending in the title's slug) after the opening turn starts. The server is bound to the main workspace, so calls
 from its child worktrees still create siblings in the same `.threads/`.
 
 The MCP door uses ordinary Codex defaults, just like the CLI agent door,
 not `IMP_DOOR_SETTINGS`. Launcher output goes to stderr, leaving stdout for
 MCP. Failed worktrees remain for inspection; an opening-turn failure reports
-the already-created thread ID and path. An occupied name is never replaced.
+the already-created thread ID and path. An occupied slug is never replaced.
 
 When a parent is supplied, the opening turn is a short handshake that replies
 `WORKSPACE_THREAD_READY` without starting the assignment. The orchestrator
