@@ -265,3 +265,13 @@ Python edits do not hot-reload an already-running server; restart its MCP
 process when upgrading it, rather than only reloading unchanged configuration.
 Fresh worktrees use workspace HEAD and fresh repository clones: commit needed
 workspace changes and publish needed source changes before launch.
+
+## Tests
+
+`test/threadlib_e2e_test.py` is the three doors against the real daemon, a
+real `br` bead and real turns, which are model calls billed to the account.
+It is skipped unless `THREADLIB_E2E=1` is set and is a final verification,
+not something to run on every edit; there is no mocked suite, because the
+launcher is glue between external systems and a test that replaces them
+checks little. Run it with
+`THREADLIB_E2E=1 .venv/bin/python -m unittest test.threadlib_e2e_test`.
