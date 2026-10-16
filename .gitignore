@@ -19,5 +19,8 @@ build/
 # Thread worktrees (lib/python/threadlib/README.md)
 .threads/
 
+# Claude worktrees
+.claude/worktrees/
+
 # Local issue tracker state
 .beads/

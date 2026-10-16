@@ -1,6 +1,6 @@
 ---
 name: workspace-thread
-description: Launch authorized bead-owned or named work in an isolated worktree of this workspace, with its sourceset, and coordinate it using Codex thread messaging. Use for delegating repository tasks through the workspace launcher.
+description: Launch authorized bead-owned work or named tasks needing isolated sources and builds through workspace_threads.create_workspace_thread. Use when asked for a workspace thread or when delegating bead-owned repository work; coordinate the worker with Codex thread messaging.
 ---
 
 # Workspace threads
@@ -8,6 +8,11 @@ description: Launch authorized bead-owned or named work in an isolated worktree 
 Use the `workspace_threads` MCP server's `create_workspace_thread` tool.
 It runs the same launcher as `thread new`; each thread receives a detached
 workspace worktree and fresh clones of its sourceset repositories.
+
+Use this launcher for workspace threads. Regular Codex threads and subagents
+inherit the caller's workspace; they do not provision a workspace worktree
+or load a sourceset. They remain useful for work intended to share the
+current checkout, such as a read-only review.
 
 - For a bead, pass `bead_id`. Its `sourceset:<name>` label selects the
   sourceset. The child is told to read the bead; `prompt` adds context.
