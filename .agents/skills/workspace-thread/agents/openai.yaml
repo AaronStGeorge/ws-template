@@ -1,0 +1,3 @@
+interface:
+  display_name: "Workspace Thread"
+  short_description: "Launch bead or named work in an isolated workspace"

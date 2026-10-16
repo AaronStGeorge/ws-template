@@ -16,6 +16,14 @@ paths in the subagent's prompt so it reads them too.
 In plan mode, when working on a new feature, run the `requirements-cop` skill on
 the drafted requirements before designing against them.
 
+## Delegating workspace work
+
+When delegating bead-owned repository work or named work that needs its own
+sources and builds, read and use the
+[workspace-thread skill](.agents/skills/workspace-thread/SKILL.md). Launch with
+`workspace_threads.create_workspace_thread`; regular Codex thread and subagent
+creation does not provision a workspace worktree or sourceset.
+
 ## Running HRX on a GPU
 
 Not every AMD GPU in a machine works with HRX, and it does not pick a good one
