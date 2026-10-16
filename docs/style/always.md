@@ -11,6 +11,11 @@ Follow each additional guide that applies to the files being changed:
 
 ## Style guidelines
 
+
+### Branch Names
+
+Branch names should follow this template: `users/astgeorg/<slug>`.
+
 ### Break compound conditions into named facts
 
 Before using a compound condition in control flow, assign each individual fact
