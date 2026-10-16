@@ -5,9 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agent-tools"
 version = "0.1.0"
-description = "Shared Python libraries for the assembly-for-dummies skills: assemblyline (Codex-loop primitives), buildlib (build types), and builds (per-project build functions)."
+description = "Shared Python libraries for this workspace: buildlib (build types), builds (per-project build functions), and threadlib (launching Codex threads in worktrees)."
 requires-python = ">=3.11"
+dependencies = ["websockets>=13", "mcp>=1.26,<2"]
+
+[project.scripts]
+thread = "threadlib.cli:main"
+thread-mcp = "threadlib.mcp:main"
 
 [tool.setuptools]
 # Three independent top-level packages installed editable; tests/ is intentionally excluded.
-packages = ["buildlib", "builds"]
+packages = ["buildlib", "builds", "threadlib"]

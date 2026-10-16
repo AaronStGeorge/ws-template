@@ -1,6 +1,6 @@
-# Python stuff
+# Python stuff (.venv without a slash: a thread worktree's .venv is a symlink)
 __pycache__/
-.venv/
+.venv
 *.egg-info/
 
 # Build directories, usually under sources/projectX/build
@@ -15,6 +15,12 @@ build/
 # imp tool state and build
 build/
 .imp/
+
+# Thread worktrees (lib/python/threadlib/README.md)
+.threads/
+
+# Claude worktrees
+.claude/worktrees/
 
 # Local issue tracker state
 .beads/

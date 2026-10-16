@@ -1,34 +1,28 @@
 #!/usr/bin/env python3
-"""Load a workspace from ``workspaces/<name>/`` into ``sources/``.
-
-A workspace is a ``workspace.json`` naming the repositories to clone, plus an
-``assets/`` directory of files that belong beside the clones (usually a
-``build.py``)::
-
-    {"repos": [{"url": "git@github.com:org/repo.git", "ref": "branch-tag-or-sha"}]}
-
-``ref`` is optional; without it the clone stays on the remote's default branch.
-
-Loading replaces whatever ``sources/`` holds, so it first refuses if anything
-there exists only locally. Assets are symlinked rather than copied so that edits
-made through ``sources/`` land in the tracked ``assets/`` directory.
+"""Load a sourceset into the main checkout's ``sources/``, by hand.
 
     python scripts/ws_load.py llama-cpp
+
+This is the by-hand door for the main checkout's ``sources/``, kept for
+review and human-in-the-loop work outside any thread. Thread worktrees are
+filled by threadlib (``lib/python/threadlib/README.md``), which also owns the
+loading itself; this script only empties ``sources/`` first and refuses when
+anything there exists only locally, because here, and only here, a load can
+destroy work.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
-import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+from threadlib import load_sourceset, read_sourceset
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCES = REPO_ROOT / "sources"
-WORKSPACES = REPO_ROOT / "workspaces"
 
 
 def git_output(repo: Path, *args: str) -> str:
@@ -59,23 +53,16 @@ def unsaved_work(entry: Path) -> list[str]:
     return reasons
 
 
-def clone(repo: dict[str, str]) -> None:
-    url = repo["url"]
-    destination = SOURCES / url.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
-    subprocess.run(["git", "clone", url, str(destination)], check=True)
-    if "ref" in repo:
-        # A remote branch name becomes a local tracking branch; a tag or SHA
-        # detaches. Both are git's own defaults.
-        subprocess.run(["git", "-C", str(destination), "checkout", repo["ref"]], check=True)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("name", help="Directory name under workspaces/.")
+    parser.add_argument("name", help="Directory name under sourcesets/.")
     args = parser.parse_args()
 
-    workspace = WORKSPACES / args.name
-    manifest = json.loads((workspace / "workspace.json").read_text(encoding="utf-8"))
+    try:
+        sourceset = read_sourceset(REPO_ROOT, args.name)
+    except FileNotFoundError as error:
+        print(f"ws_load: {error}", file=sys.stderr)
+        return 1
 
     entries = loaded_entries()
     blocked = {entry: reasons for entry in entries if (reasons := unsaved_work(entry))}
@@ -91,16 +78,7 @@ def main() -> int:
         else:
             shutil.rmtree(entry)
 
-    for repo in manifest["repos"]:
-        clone(repo)
-
-    assets = workspace / "assets"
-    if assets.is_dir():
-        for asset in sorted(assets.iterdir()):
-            # Relative, so the links survive the repository being moved or mounted
-            # at another path.
-            (SOURCES / asset.name).symlink_to(os.path.relpath(asset, SOURCES))
-
+    load_sourceset(sourceset, REPO_ROOT, sys.stderr)
     return 0
 
 

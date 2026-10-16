@@ -8,8 +8,12 @@ Codex is called only to diagnose failed CI and is instructed to change nothing.
 
 The wrapper gates CI on the pushed head before accepting a verdict. There is
 no repair or retry loop here: the fork validation is expected to have tested
-the same change already. Paths come from this file, argv, and the temporary
-workspace; subprocesses use explicit working directories where needed.
+the same change already. The Run works in a thread
+(lib/python/threadlib/README.md): a worktree of this workspace at
+.threads/<slug> with the ggml-staging-automation sourceset loaded, so the
+clone is sources/ggml-staging-automation, and the diagnosis, when CI goes
+red, runs as a turn of that thread on Codex's daemon. Subprocesses use
+explicit working directories where needed.
 """
 
 import argparse
@@ -17,9 +21,12 @@ import json
 import re
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
+
+from threadlib import IMP_DOOR_SETTINGS, prepare, run_turn
+
+SOURCESET = "ggml-staging-automation"
 
 # Direct human launches can supply arbitrary URLs. Keep the accepted
 # repositories explicit; the bump capture supplies the workspace slug.
@@ -30,10 +37,6 @@ UPSTREAM_PR_URL = re.compile(
 STAGING_PR_URL = re.compile(
     r"https://github\.com/ROCm/ggml-staging-automation/pull/(\d+)"
 )
-
-# Cloned directly — the imp is self-contained and depends on no local
-# checkout of the staging repo.
-STAGING_REPO_URL = "git@github.com:ROCm/ggml-staging-automation.git"
 
 # The canonical submodule coordinates the repoint restores: the fix run
 # left .gitmodules pointing at the personal fork, and these two values are
@@ -61,9 +64,10 @@ DIAGNOSIS_INSTRUCTIONS = """\
 The mechanical repoint of the llama.cpp submodule to the merged upstream
 PR {upstream_pr_url} went red on the bump PR {bump_pr_url}.
 
-This workspace holds a clone of ggml-staging-automation checked out on
-the PR's head branch `{head_branch}`, with the repoint commit already
-pushed; submodules are not initialized. Read the failing logs — `gh pr
+Your working directory is a worktree of this workspace; its
+`sources/ggml-staging-automation` is a clone checked out on the PR's head
+branch `{head_branch}`, with the repoint commit already pushed; submodules
+are not initialized. Read the failing logs — `gh pr
 checks {bump_pr_url}`, `gh run view --log-failed` — and produce a
 diagnosis: a guess at what went wrong and what a human should check.
 
@@ -206,12 +210,16 @@ def main():
         text=True,
     ).stdout.strip()
 
-    wsdir = Path(tempfile.mkdtemp(prefix=f"{slug}-"))
-    clone = wsdir / "ggml-staging-automation"
-    run_to_log(
-        ["git", "clone", "--origin", "origin", STAGING_REPO_URL, str(clone)],
-        check=True,
+    # The thread exists from here even when CI stays green and no turn is
+    # ever sent: a thread with no turns is not listed in the command center,
+    # and making the worktree is the same work either way. A worktree left
+    # by an earlier Run of the same PR makes this fail; remove it
+    # (`git worktree remove .threads/<slug>`) before relaunching.
+    thread, client = prepare(
+        slug, SOURCESET, settings=IMP_DOOR_SETTINGS, log=sys.stderr
     )
+    wsdir = thread.worktree
+    clone = wsdir / "sources" / "ggml-staging-automation"
     run_to_log(["git", "checkout", head_branch], cwd=clone, check=True)
 
     print(f"run workspace: {wsdir}", file=sys.stderr)
@@ -277,39 +285,29 @@ def main():
     )
     bump_pr_is_green = checks.returncode == 0
     if bump_pr_is_green:
+        client.close()
         return
 
     # Red: the diagnosis agent. Its handoff is schema-forced to the one
     # string the human needs, printed into the Run log; the Run then fails
     # on purpose — a failed Run is what flags it for attention, and there are
     # no retry semantics anywhere in this imp.
-    schema_path = wsdir / ".handoff-schema.json"
-    schema_path.write_text(
-        json.dumps(DIAGNOSIS_SCHEMA, indent=2) + "\n", encoding="utf-8"
-    )
-    handoff_path = wsdir / ".handoff.json"
     prompt = DIAGNOSIS_INSTRUCTIONS.format(
         upstream_pr_url=upstream_pr_url,
         bump_pr_url=bump_pr_url,
         head_branch=head_branch,
     )
-    run_to_log(
-        [
-            "codex",
-            "exec",
-            "--dangerously-bypass-approvals-and-sandbox",
-            "--skip-git-repo-check",
-            "-C",
-            str(clone),
-            "--output-schema",
-            str(schema_path),
-            "--output-last-message",
-            str(handoff_path),
-            prompt,
-        ],
-        check=True,
+    result = run_turn(
+        client, thread, prompt, output_schema=DIAGNOSIS_SCHEMA, log=sys.stderr
     )
-    handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
+    client.close()
+    turn_finished = result.status == "completed"
+    if not turn_finished:
+        raise SystemExit(
+            f"bump PR went red after the repoint and the diagnosis turn "
+            f"{result.status}: {result.error}"
+        )
+    handoff = json.loads(result.last_agent_message)
     print(json.dumps(handoff, indent=2), file=sys.stderr)
 
     raise SystemExit(

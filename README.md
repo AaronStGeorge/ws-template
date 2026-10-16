@@ -11,6 +11,11 @@ Except rather than horses, agents are zipping around — consuming tokens, farti
 _How_ the agents are orchestrated and go about actually accomplishing things has been changing pretty frequently.
 You'll need to look in `.agents/skills` to get a handle on how things work at the moment.
 
+What goes into `sources/` is a *sourceset*, `sourcesets/<name>/sourceset.json`; `python scripts/ws_load.py <name>` fills the main checkout's `sources/` by hand.
+A piece of work gets a *thread*: `thread new <bead-id>` (or `thread new --name <title> --sourceset <name>`) cuts a worktree of this clone under `.threads/`, loads the sourceset into it, and opens a Codex session there that shows in Codex's agent command center beside everything else running; `thread new ... --prompt TEXT` starts one without attaching.
+Imps run their agents the same way.
+[lib/python/threadlib/README.md](lib/python/threadlib/README.md) is the record of how and why.
+
 ## Setup
 
 `direnv` will do it all for you, alternatively:
