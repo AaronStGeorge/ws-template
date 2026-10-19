@@ -127,7 +127,7 @@ class Client:
     def start_thread(self, cwd: Path, settings: dict[str, Any]) -> dict[str, Any]:
         """Create a thread with ``cwd``; returns the daemon's thread document.
 
-        ``settings`` are extra ``thread/start`` params, the door's approval
+        ``settings`` are extra ``thread/start`` params, the caller's approval
         policy and sandbox; empty means the user's own Codex defaults.
         """
         result = self.request("thread/start", {"cwd": str(cwd), **settings})

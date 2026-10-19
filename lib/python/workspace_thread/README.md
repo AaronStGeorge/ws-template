@@ -3,14 +3,10 @@
 A workspace thread is a Codex thread working in its own worktree of this
 workspace, hosted on Codex's daemon so it appears in the agent command
 center (`/agents`) as a live, named, openable row. workspace_thread is the
-one program that makes a workspace thread, and every door onto a new one
+one program that makes a workspace thread, and every entry onto a new one
 goes through it: the `workspace-thread` executable for a human at a
-terminal, the library for an Imp or an agent that starts a workspace thread
-from inside its own thread. This README is the design record for the
-component, settled in a grilling session on 2026-10-10 and implemented on
-the same branch; the code is the files beside it, each with a header saying
-what it owns. The terminology was settled on 2026-10-19, after checking how
-Codex itself uses "thread"; the Language section records the result.
+terminal, the `create_workspace_thread` MCP tool for an agent, the library
+for an Imp.
 
 ## Why
 
@@ -22,18 +18,22 @@ work, and get a thread in a fresh worktree with the right sources checked
 out, visible alongside every other thread in the command center, and
 reachable by other agents while it runs.
 
-The requirements, from that grilling session:
+The requirements:
 
-- A workspace thread is launched by a bead id or by a plain name; a bead is
+- A workspace thread is launched by a bead id or by a title; a bead is
   optional.
-- The workspace thread is named after the bead (or the name), and its
-  worktree holds the sourceset the bead asks for.
-- Every workspace thread looks and behaves the same in the command center,
-  whether a human or an Imp started it: a live status, openable, steerable.
+- The workspace thread carries the work's name in the command center, and
+  its worktree holds the sources that work needs: the bead's sourceset, the
+  one named alongside a title, or none.
+- Every workspace thread, whoever started it, is a live, openable,
+  steerable row in the command center.
 - Other agents can send a running workspace thread a message.
-- Every door (terminal, skill, Imp) is the same program.
 - An agent can start a sibling workspace thread and carry on without
   waiting for it.
+- An Imp's workspace thread runs unattended to an outcome the Imp turns
+  into an exit code, with its transcript in the Run log.
+- The command a human types says whether they stay attached to the thread
+  or it runs without them.
 
 ## Language
 
@@ -77,75 +77,119 @@ checkout). A bead names its sourceset with the label `sourceset:<name>`.
 and serves the command center. Never "the Daemon": in this workspace that
 word is `impd`.
 
-**Door** — a way of asking for a new workspace thread. Three exist: the
-human door (`workspace-thread new`, ending in an interactive `codex`), the
-agent door (`workspace-thread new --prompt` or MCP, starting the first turn
-and returning), and the Imp door (the library, blocking until the turn is
-done).
+**Entry** — a way of asking for a new workspace thread: the three named at
+the top, one per kind of caller, each the one program. An agent without
+the MCP tool, or a script, reaches the executable through a shell; that is
+a fallback, not a fourth entry. An entry takes an assignment and ends one
+of the ways below.
+
+**Assignment** — what the workspace thread is for: a bead id, or a title
+with an optional sourceset, plus an optional prompt. A bead supplies the
+title, the sourceset and the opening prompt, and a prompt given alongside
+it is appended. assignment.py resolves one.
+
+**Ending** — what the caller does once the thread exists. Three exist:
+
+- **attach** — become an interactive `codex` on the thread.
+- **detach** — start its first turn and return at once.
+- **wait** — start its first turn and follow it to its end.
+
+Each entry offers the endings its caller has a use for: the executable
+attach and detach, because a human either sits in the thread or starts it
+and comes back later; the MCP tool detach, because an agent carries on and
+Codex's native tools do its waiting; the library all three, because the
+executable is built on it and an Imp waits. The prompt belongs to the
+assignment, not the ending: it says what the thread is for, not whether
+the caller stays. Attach and wait both keep the caller in the foreground;
+the names say which one drives the thread. The ending's name is not git's:
+a worktree's detached HEAD is spelled out as `git worktree add --detach`
+in the Design and nowhere else.
+
+**Unattended** — the settings a thread runs under when no one will answer
+an approval prompt: approvals never and the sandbox off,
+`UNATTENDED_SETTINGS` in launch.py. Which entries pass them is a decision
+in force (settings follow attendance).
 
 ## What workspace_thread commits to
 
-The human door:
+The executable, the human's entry:
 
 ```
-workspace-thread new <bead-id>                          # named after the bead; sourceset from its label
-workspace-thread new --name <title> [--sourceset <s>]   # no bead; without a sourceset sources/ stays empty
-workspace-thread new <bead-id-or-flags> --prompt TEXT   # agent door: start the first turn, print the Codex thread id, return
+workspace-thread new <bead-id> [--prompt TEXT]                         # named after the bead; sourceset from its label
+workspace-thread new --name <title> [--sourceset <s>] [--prompt TEXT]  # no bead; without a sourceset sources/ stays empty
+workspace-thread new ... --detach                                      # start the first turn, print the Codex thread id, return
 ```
 
-Without `--prompt`, either form ends with an interactive `codex` attached
-to the new workspace thread, inside the new worktree, with the thread
-already named; on a bead, the opening prompt ("Work on bead `<id>`...") is
-typed for you as the first turn. With `--prompt`, the agent door, the
-thread's first turn is started with that prompt (after the bead prompt,
-when there is a bead) and the command returns at once, printing the Codex
-thread id; the caller follows up with `codex queue --thread <id>` or by
-opening the thread. The Imp door is the library: `prepare(name, sourceset,
-settings)` runs the shared steps and returns the workspace thread and the
-daemon connection, and
-`run_turn(client, thread, prompt, output_schema)` sends the opening prompt,
-streams the turn's items into the Run log, and returns a `TurnResult`
-(status, error, last agent message) for the Imp to turn into an exit code.
-`IMP_DOOR_SETTINGS` is the Imp door's approval and sandbox choice; an Imp
-adds a `model` or `config` to it when its Manifest configures one.
+Either form names an assignment; `--detach` picks the ending. Without it
+the command attaches: it ends as an interactive `codex` on the new
+workspace thread, inside the new worktree, with the thread already named.
+The opening prompt is typed for you as the first turn when there is one:
+the bead's ("Work on bead `<id>`...") with `--prompt` appended after a
+blank line, or `--prompt` alone; with neither, you type the first turn
+yourself. An empty `--prompt` counts as none. With `--detach` the thread's
+first turn is started with that opening prompt and the command returns at
+once; stdout carries the Codex thread id and nothing else, and the
+launcher's progress goes to stderr, so a shell can capture the id. The
+caller follows up with `codex queue --thread <id>` or by opening the
+thread. A detach must have something to send, so a named workspace thread
+needs `--prompt` and a bead's already has one. If the opening turn fails
+after the thread exists, the command exits 1 with one stderr line naming
+the thread id and worktree, as the MCP tool does.
 
-What every door guarantees once it returns:
+The library is the launcher and has every ending. `prepare(name,
+sourceset, settings)` runs the shared steps and returns the workspace
+thread and the daemon connection; `attach(thread, prompt)` replaces the
+process with `codex resume`; `start_turn(client, thread, prompt,
+output_schema)` sends the opening prompt and returns the turn id; and
+`run_turn(client, thread, prompt, output_schema)` sends it, streams the
+turn's items into the Run log, and returns a `TurnResult` (status, error,
+last agent message) for an Imp to turn into an exit code.
+`opening_prompt(prompt)` is the one check the turn-starting endings share:
+the prompt, or a `ValueError` when there is none to send. An Imp calls
+`prepare` with `UNATTENDED_SETTINGS`, adding a `model` or `config` when its
+Manifest configures one, and ends with `run_turn`.
 
-- A detached worktree of the workspace exists at `.workspace-threads/<slug>`,
+What the launcher guarantees by the time any ending begins:
+
+- A worktree of the workspace, on no branch, exists at `.workspace-threads/<slug>`,
   with `sources/` holding the sourceset's repositories and assets, or empty
   when no sourceset was named.
 - A Codex thread named with the title exists on the daemon with the worktree
   as its cwd, so it is a row in the command center from its first turn and
   `codex resume` and `codex queue --thread` both reach it, by id or by
   exact name.
-- With a bead, the thread's opening prompt says to work on that bead. That
-  is the whole bead process for now; claiming, branching, handoff and close
-  are deliberately unspecified until use shows what they should be.
+- With a bead, the thread's opening prompt says to work on that bead, and
+  that is the whole bead process for now (Decisions in force).
 
 A title is any text with at least one ASCII letter or digit. Its slug,
-lowercase with runs of anything else collapsed to one hyphen and at most
-128 characters, names the worktree, so two titles with the same slug
-collide: the second is refused with the slug that collided and the `git
-worktree remove` that frees it, because two workspace threads sharing a
-checkout would share each other's half-done work. This is what an Imp hits
-when a Run is relaunched for the same PR; removing the old worktree is part
-of the relaunch. A bead id or a Run Id is already a slug and is its own; the
-bead id is still checked strictly where it is read back from `br`, because
-it goes verbatim into `br show`.
+lowercase with runs of anything else collapsed to one hyphen, leading and
+trailing hyphens dropped, and at most 128 characters, names the worktree,
+so two titles with the same slug collide: the second is refused with the
+slug that collided and the `git worktree remove` that frees it, because
+two workspace threads sharing a checkout would share each other's
+half-done work. This is what an Imp hits when a Run is relaunched for the
+same PR; removing the old worktree is part of the relaunch. A bead id or a
+Run Id is already a slug and is its own; the bead id is still checked
+strictly where it is read back from `br`, because it goes verbatim into
+`br show`.
 
 Failures before the Codex thread exists (no such sourceset, a bead without a
-`sourceset:` label, a bead `br` does not know, a worktree in the way) exit
-1 with one line on stderr. A worktree that was cut before a later step
-failed is left in place for inspection, like a failed Run's log.
+`sourceset:` label, a bead `br` does not know, a worktree in the way, a
+detach with nothing to send) exit 1 with one line on stderr. The detach
+refusal is checked before anything is cut, so a refused detach leaves no
+worktree behind. A worktree that was cut before a later step failed, and a
+thread whose opening turn failed, are left in place for inspection, like a
+failed Run's log.
 
 ## Design
 
 ### The six steps
 
-Every door runs the same steps; only the last differs.
+Every entry runs the same steps; only the ending differs.
 
 1. **Name.** The bead id, or the given title. The Codex thread carries the
-   title; the worktree carries its slug.
+   title; the worktree carries its slug. For a detach, the opening prompt
+   is checked here too.
 2. **Worktree.** `git worktree add --detach` of the workspace at
    `.workspace-threads/<slug>` inside the clone, gitignored like `.imp/`, so
    a workspace thread's worktree is spelled after its Codex thread and its
@@ -164,23 +208,20 @@ Every door runs the same steps; only the last differs.
    outside the clone, one inside it, and from a nested repo under its
    `sources/`).
 5. **Thread.** Ensure Codex's daemon is up, connect to its socket, send
-   `thread/start` with the worktree as cwd and the door's approval and
-   sandbox settings, then `thread/name/set`, then a no-op
-   `thread/section/move` so the daemon writes the thread's rollout file:
-   it otherwise writes nothing until a turn lands, and `codex resume`
-   reads from disk, so a thread with no turn yet fails to resume
-   (codex.py, `persist_thread`, has what else was tried). The human door
-   passes nothing and gets the user's own Codex defaults; the Imp door sets
-   approvals to never and the sandbox off, as the imps run today, because
-   a thread that paused for approval would hang with no one watching and
-   the imp design record's constraints ask for no hardening. Both doors do
-   this, which is what makes their workspace threads indistinguishable in
-   the command center.
-6. **Door.** Human: exec `codex resume <id>` in the worktree. Agent:
-   send `turn/start` with the prompt, print the Codex thread id, return.
-   Imp: send `turn/start` with the prompt, stream the thread's events into
-   the Run log, return the turn's outcome. In every case the thread stays
-   on the daemon afterwards as a Ready row.
+   `thread/start` with the worktree as cwd and the caller's approval and
+   sandbox settings (Decisions in force: settings follow attendance), then
+   `thread/name/set`, then a no-op `thread/section/move` so the daemon
+   writes the thread's rollout file: it otherwise writes nothing until a
+   turn lands, and `codex resume` reads from disk, so a thread with no
+   turn yet fails to resume (codex.py, `persist_thread`, has what else was
+   tried). This step being the same for every entry is what makes their
+   workspace threads the same rows in the command center.
+6. **Ending.** Attach: exec `codex resume <id>` in the worktree, with the
+   opening prompt when there is one. Detach: send `turn/start` with the
+   prompt and return; the library hands back the turn id, the executable
+   prints the thread id. Wait: send `turn/start` with the prompt, stream
+   the thread's events into the Run log, return the turn's outcome. In
+   every case the thread stays on the daemon afterwards as a Ready row.
 
 ### Why the workspace thread lives on Codex's daemon and not in `codex exec`
 
@@ -218,15 +259,36 @@ through them, and nothing placed there is safe.
 
 ### Decisions in force
 
-- One library, three doors. The library is the launcher; `workspace-thread`
-  is a thin executable over it for the human and agent doors; an Imp
-  imports it. The MCP server adds a structured creation tool for agents,
-  using the same assignment resolution and launcher as the CLI. Codex's
-  native tools own reading, messaging, and waiting; the workspace does not
-  duplicate them.
-- The Imp door is a Run through `impd`, so an Imp's workspace thread has a
-  Run Id and a log as every Run does. Imps have no beads to start with, so
-  an Imp's workspace thread is named after its Run Id and the Imp names the
+- One library, three entries, three endings. The library owns every
+  ending; the executable and the MCP tool are thin layers over it that
+  share its assignment resolution, and an Imp imports it. Which endings
+  each entry offers is in Language. Codex's native tools own reading,
+  messaging, and waiting on a thread that already exists; the workspace
+  does not duplicate them.
+- The ending is the caller's to say, never inferred from the assignment;
+  `--detach` says it. Until 2026-10-19 the executable read `--prompt` as
+  the request to detach, which left a human unable to open a named thread
+  with a first turn typed for them, and made detaching on a bead with
+  nothing to add a matter of passing an empty prompt.
+- The prompt check is the ending's, not the assignment's. `opening_prompt`
+  lives in launch.py beside `start_turn`; an assignment may lack a prompt,
+  and only an ending that starts a turn refuses that.
+- Settings follow attendance, not the entry. `UNATTENDED_SETTINGS` is for
+  a thread no one will answer, which is every Imp's: a thread that paused
+  for approval in a Run would hang, and the imp design record's
+  constraints ask for no hardening, so the imps keep the settings they ran
+  under with `codex exec`. The executable and the MCP tool pass the user's
+  defaults in every ending, detach included, so a detached thread can
+  pause for an approval that only a human watching the command center can
+  give. That is right when a human detached it and open when an agent
+  did; whether the MCP tool should launch unattended is to be settled the
+  first time one of its threads hangs.
+- The executable has no wait ending. An Imp needs the output schema, the
+  streamed log and the `TurnResult`, which is the library's shape, and
+  nothing else has asked to block on a turn from a shell.
+- An Imp's workspace thread is a Run through `impd`, so it has a Run Id
+  and a log as every Run does. Imps have no beads to start with, so an
+  Imp's workspace thread is named after its Run Id and the Imp names the
   sourceset itself. How a Run Id and a bead id relate is decided when an
   Imp first has a bead, not before.
 - Every Imp moves onto this, the bump loop included; temp-dir clones and
@@ -234,14 +296,12 @@ through them, and nothing placed there is safe.
   worktree symlinks the main checkout's `.venv` itself, as the imps did
   into their temp dirs: Codex's daemon runs the agent's shell without
   direnv, and the tradeoff of a shared venv is the Imp's to accept.
-- A bead is optional and the workspace thread's name comes from it when
-  present.
 - `impctl` is not the launcher. The imp design record asks it to be the
   dumb Daemon client; git worktrees, sourcesets and Codex's daemon are all
   outside that boundary, and the launcher is a Client of `impd` when it
   launches a Run.
-- The bead process beyond the opening prompt is unspecified on purpose, to
-  be discovered by use.
+- The bead process beyond the opening prompt (claiming, branching, handoff
+  and close) is unspecified on purpose, to be discovered by use.
 - Sourceset loading moves into workspace_thread as a function, and
   `scripts/ws_load.py` becomes a thin command over it for filling the main
   checkout's `sources/` by hand, which stays a real use: work is loaded
@@ -254,9 +314,11 @@ through them, and nothing placed there is safe.
 
 The checked-in `.codex/config.toml` registers the server for this trusted
 workspace. Codex loads it automatically; no `codex mcp add` or user-level
-configuration is needed. Its launcher resolves the main checkout through
-Git, so the same configuration works in linked worktrees and at different
-checkout paths. It uses the main checkout's virtualenv.
+configuration is needed. The configured command resolves the main checkout
+through Git and runs the server from its virtualenv, bound to that
+checkout, so the same configuration works in linked worktrees and at
+different checkout paths, and a call from a child worktree creates a
+sibling in the same `.workspace-threads/`.
 
 Entering the main checkout with direnv installs the MCP dependencies when
 needed. Without direnv, install the workspace package manually:
@@ -270,20 +332,16 @@ clones can finish before the client times out. Shell setup also works when
 Codex is not installed; install Codex when you want to use the tool.
 
 The server exposes exactly one tool, `create_workspace_thread`. Give either
-`bead_id`, or `name` with a nonempty `prompt` and optional `sourceset`.
-A bead provides the sourceset and opening assignment; `prompt` adds context.
+`bead_id`, or `name` with a nonempty `prompt` and optional `sourceset`,
+resolved as the executable's arguments are.
 `parent_thread_id` adds a return address and tells the worker to report
 progress, blockers, and completion through Codex's native messaging tool.
 The result contains `thread_id`, `turn_id`, `name` (the typed title), and
-`worktree` (ending in the title's slug) after the opening turn starts. The
-server is bound to the main workspace, so calls from its child worktrees
-still create siblings in the same `.workspace-threads/`.
+`worktree` (ending in the title's slug) after the opening turn starts.
 
-The MCP door uses ordinary Codex defaults, just like the CLI agent door,
-not `IMP_DOOR_SETTINGS`. Launcher output goes to stderr, leaving stdout for
-MCP. Failed worktrees remain for inspection; an opening-turn failure
-reports the already-created Codex thread ID and worktree path. An occupied
-slug is never replaced.
+The tool's ending is detach under the user's Codex defaults, as
+`workspace-thread new --detach` is; its failures are those in What
+workspace_thread commits to, surfaced as the tool's error.
 
 When a parent is supplied, the opening turn is a short handshake that replies
 `WORKSPACE_THREAD_READY` without starting the assignment. The orchestrator
@@ -311,10 +369,15 @@ workspace changes and publish needed source changes before launch.
 
 ## Tests
 
-`test/workspace_thread_e2e_test.py` is the three doors against the real
+`test/workspace_thread_e2e_test.py` is the three endings against the real
 daemon, a real `br` bead and real turns, which are model calls billed to
-the account. It is skipped unless `WORKSPACE_THREAD_E2E=1` is set and is a
-final verification, not something to run on every edit; there is no mocked
+the account: detach runs the `workspace-thread` executable as a subprocess
+and reads its stdout as a shell would; attach calls the command's entry
+point in-process, because the only way to see the `codex resume` argv is
+to intercept the final exec, and so checks what is handed to Codex rather
+than what Codex types; wait goes through the library as an Imp does. It is
+skipped unless `WORKSPACE_THREAD_E2E=1` is set and is a final
+verification, not something to run on every edit; there is no mocked
 suite, because the launcher is glue between external systems and a test
 that replaces them checks little. Run it with:
 

@@ -24,7 +24,7 @@ import sys
 import time
 from pathlib import Path
 
-from workspace_thread import IMP_DOOR_SETTINGS, prepare, run_turn
+from workspace_thread import UNATTENDED_SETTINGS, prepare, run_turn
 
 SOURCESET = "ggml-staging-automation"
 
@@ -216,7 +216,7 @@ def main():
     # by an earlier Run of the same PR makes this fail; remove it
     # (`git worktree remove .workspace-threads/<slug>`) before relaunching.
     thread, client = prepare(
-        slug, SOURCESET, settings=IMP_DOOR_SETTINGS, log=sys.stderr
+        slug, SOURCESET, settings=UNATTENDED_SETTINGS, log=sys.stderr
     )
     wsdir = thread.worktree
     clone = wsdir / "sources" / "ggml-staging-automation"

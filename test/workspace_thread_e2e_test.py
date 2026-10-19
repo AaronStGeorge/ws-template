@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""End-to-end checks of workspace_thread's three doors against the real Codex daemon.
+"""End-to-end checks of workspace_thread's three endings against the real Codex daemon.
 
 THIS TEST IS VERY EXPENSIVE: RUN IT ONLY AS A FINAL VERIFICATION. Two of the
-three doors are defined by starting a turn, and a turn is a real model call
+three endings are defined by starting a turn, and a turn is a real model call
 billed to the user's Codex account. It also creates real Codex threads on the
 user's daemon, which show up in the command center while the test runs. It
 is skipped unless ``WORKSPACE_THREAD_E2E=1`` is set, so nothing here runs by
@@ -11,8 +11,10 @@ accident; set it only once a change to the launcher is otherwise complete.
 Everything is real: Codex's daemon (thread creation, naming, turns,
 deletion), ``br`` (a bead with a ``sourceset:`` label), git (worktrees and
 clones), and workspace discovery, since the test runs from the fixture
-workspace as a shell would. Only the human door's final ``execvp`` of
-``codex resume`` is intercepted, because the test cannot survive being
+workspace as a shell would. Detach runs the ``workspace-thread`` executable
+as a subprocess and reads its stdout as a shell would. Only the attach
+ending's final ``execvp`` of ``codex resume`` is intercepted, because the
+test cannot survive being
 replaced by an interactive session; everything up to that point, including
 the argv it would exec, is checked for real.
 
@@ -27,7 +29,6 @@ an idle thread.
 
 from __future__ import annotations
 
-import io
 import json
 import os
 import shutil
@@ -36,14 +37,14 @@ import sys
 import tempfile
 import time
 import unittest
-from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from workspace_thread import IMP_DOOR_SETTINGS, cli, prepare, run_turn
+from workspace_thread import UNATTENDED_SETTINGS, cli, prepare, run_turn
 from workspace_thread.codex import Client, socket_path
 
 ONE_WORD_PROMPT = "Reply with exactly the word OK and do nothing else."
+EXTRA_PROMPT = "Start by listing sources/."
 TURN_TIMEOUT_SECONDS = 300
 
 
@@ -79,7 +80,7 @@ def read_thread(client: Client, thread_id: str) -> dict:
 def wait_until_idle(client: Client, thread_id: str) -> dict:
     """Poll ``thread/read`` until the thread's turn is over; return the thread.
 
-    The agent door returns while its turn runs and closes its connection,
+    The detach ending returns while its turn runs and closes its connection,
     so the turn's notifications are not available to wait on; the thread's
     own status is.
     """
@@ -99,7 +100,7 @@ def wait_until_idle(client: Client, thread_id: str) -> dict:
 
 @unittest.skipUnless(os.environ.get("WORKSPACE_THREAD_E2E") == "1", "set WORKSPACE_THREAD_E2E=1 to run against the real daemon")
 @unittest.skipUnless(shutil.which("codex") and shutil.which("br"), "needs codex and br on PATH")
-class DoorTests(unittest.TestCase):
+class EndingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -121,7 +122,7 @@ class DoorTests(unittest.TestCase):
         git(self.workspace, "commit", "-m", "sourceset")
         br(self.workspace, "init", "--prefix", "e2e", "--quiet")
         # `workspace-thread new` finds its workspace from the current directory, as a
-        # human's shell would, so run from the fixture rather than redirecting
+        # shell would, so run from the fixture rather than redirecting
         # discovery; attach() chdirs again into the worktree. Either way,
         # put the test back afterwards.
         self.addCleanup(os.chdir, os.getcwd())
@@ -147,36 +148,42 @@ class DoorTests(unittest.TestCase):
         self.assertEqual(Path(thread["cwd"]).resolve(), worktree.resolve())
         return thread
 
-    def test_human_door_opens_a_bead_thread_and_resumes_it_by_id(self) -> None:
-        created = json.loads(br(self.workspace, "create", "e2e: the [human] door", "-l", "sourceset:sample", "--json"))
+    def test_attach_execs_codex_resume_on_a_bead_thread_with_the_prompt_appended(self) -> None:
+        created = json.loads(br(self.workspace, "create", "e2e: the [attach] ending", "-l", "sourceset:sample", "--json"))
         bead_id = created["id"]
         execs: list[list[str]] = []
         with patch("workspace_thread.launch.os.execvp", side_effect=lambda file, argv: execs.append(argv)):
-            self.assertEqual(cli.main(["new", bead_id]), 0)
+            self.assertEqual(cli.main(["new", bead_id, "--prompt", EXTRA_PROMPT]), 0)
         self.assertEqual(len(execs), 1)
         codex, resume, thread_id, opening = execs[0]
         self.delete_thread_in_cleanup(thread_id)
         self.assertEqual((codex, resume), ("codex", "resume"))
         self.assertIn(f"br show {bead_id} --json", opening)
+        self.assertTrue(opening.endswith(f"\n\n{EXTRA_PROMPT}"), opening)
         worktree = self.workspace / ".workspace-threads" / bead_id
         self.assertEqual((worktree / "sources/sample/README.md").read_text(), "fixture\n")
         self.assertEqual(Path.cwd(), worktree)
         thread = self.assert_thread_on_daemon(thread_id, bead_id, worktree)
-        self.assertEqual(thread.get("turns") or [], [], "the human door starts no turn")
+        self.assertEqual(thread.get("turns") or [], [], "attach starts no turn")
         # `codex resume` reads the rollout from disk; with no turn yet, only
         # the launcher's persist step puts it there.
         rollout = Path(thread["path"] or "")
         self.assertTrue(rollout.is_file() and rollout.stat().st_size > 0, f"no rollout on disk for {thread_id}: {thread.get('path')}")
 
-    def test_agent_door_runs_a_turn_on_a_free_form_title_and_prints_the_id(self) -> None:
-        title = "e2e: the [agent] door, with spaces & punctuation"
-        slug = "e2e-the-agent-door-with-spaces-punctuation"
-        stdout = io.StringIO()
-        with redirect_stdout(stdout):
-            result = cli.main(["new", "--name", title, "--sourceset", "sample", "--prompt", ONE_WORD_PROMPT])
-        self.assertEqual(result, 0)
-        thread_id = stdout.getvalue().strip()
+    def test_detach_runs_the_executable_on_a_free_form_title_and_prints_only_the_id(self) -> None:
+        title = "e2e: the [detach] ending, with spaces & punctuation"
+        slug = "e2e-the-detach-ending-with-spaces-punctuation"
+        executable = Path(sys.executable).with_name("workspace-thread")
+        result = subprocess.run(
+            [str(executable), "new", "--name", title, "--sourceset", "sample",
+             "--prompt", ONE_WORD_PROMPT, "--detach"],
+            cwd=self.workspace, capture_output=True, text=True, timeout=TURN_TIMEOUT_SECONDS,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        thread_id = result.stdout.strip()
         self.delete_thread_in_cleanup(thread_id)
+        self.assertEqual(result.stdout, f"{thread_id}\n", "stdout is the id and nothing else")
+        self.assertIn("cutting worktree", result.stderr)
         worktree = self.workspace / ".workspace-threads" / slug
         self.assertTrue((worktree / "sources/sample/README.md").is_file())
         client = Client.connect()
@@ -188,12 +195,12 @@ class DoorTests(unittest.TestCase):
         self.assertEqual(statuses, ["completed"], thread["turns"])
         self.assert_thread_on_daemon(thread_id, title, worktree)
 
-    def test_imp_door_runs_a_turn_to_completion_under_imp_settings(self) -> None:
-        run_id = f"e2e-imp-{os.getpid()}"
+    def test_wait_runs_a_turn_to_completion_under_unattended_settings(self) -> None:
+        run_id = f"e2e-wait-{os.getpid()}"
         # A real file, as an Imp's Run log is: prepare hands it to git as stdout.
         log_path = self.root / "run.log"
         with log_path.open("w") as log:
-            thread, client = prepare(run_id, "sample", settings=IMP_DOOR_SETTINGS, workspace=self.workspace, log=log)
+            thread, client = prepare(run_id, "sample", settings=UNATTENDED_SETTINGS, workspace=self.workspace, log=log)
             self.delete_thread_in_cleanup(thread.thread_id)
             try:
                 result = run_turn(client, thread, ONE_WORD_PROMPT, log=log)

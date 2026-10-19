@@ -50,7 +50,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from workspace_thread import IMP_DOOR_SETTINGS, prepare, run_turn
+from workspace_thread import UNATTENDED_SETTINGS, prepare, run_turn
 
 # The Imp process contract makes cwd the workspace root. Bare `impctl`
 # resolves the Daemon from the same cwd, so the Runs listed and the paths
@@ -277,7 +277,7 @@ def run_check(args, root_run):
         general_rules=GENERAL_RULES,
     )
     settings = {
-        **IMP_DOOR_SETTINGS,
+        **UNATTENDED_SETTINGS,
         "model": args.model,
         "config": {"model_reasoning_effort": args.effort},
     }

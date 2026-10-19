@@ -37,9 +37,7 @@ def create(
     task = assignment.resolve(
         workspace, bead_id=bead_id, name=name, sourceset=sourceset, prompt=prompt
     )
-    if not task.prompt:
-        raise ValueError("named launches require a nonempty prompt")
-    opening = task.prompt
+    opening = launch.opening_prompt(task.prompt)
     if parent_thread_id is not None:
         opening += (
             f"\n\nYour orchestrator is Codex thread {parent_thread_id}. "

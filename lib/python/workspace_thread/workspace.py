@@ -49,7 +49,7 @@ def validate_name(name: str) -> str:
 def slugify(title: str) -> str:
     """The worktree directory name for a workspace thread title, else ValueError.
 
-    Called once, in launch.prepare, the funnel every door goes through. A
+    Called once, in launch.prepare, the funnel every entry goes through. A
     bead id or an imp Run Id is already this shape and comes back unchanged,
     which is what lets an Imp find its worktree at ``.workspace-threads/<run-id>``.
     An empty slug is refused here because ``.workspace-threads/`` joined with "" is

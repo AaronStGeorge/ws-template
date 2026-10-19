@@ -1,17 +1,19 @@
-"""``workspace-thread``: the human and agent doors onto a new workspace thread.
+"""``workspace-thread``: the human's entry onto a new workspace thread.
 
 ::
 
-    workspace-thread new <bead-id>                          # named after the bead; sourceset from its label
-    workspace-thread new --name <title> [--sourceset <s>]   # no bead
-    workspace-thread new ... --prompt TEXT                  # agent door: start the first turn and return
+    workspace-thread new <bead-id> [--prompt TEXT]                        # named after the bead; sourceset from its label
+    workspace-thread new --name <title> [--sourceset <s>] [--prompt TEXT]  # no bead
+    workspace-thread new ... --detach                                     # start the first turn, print the Codex thread id, return
 
-Without ``--prompt`` the command ends as an interactive ``codex`` on the new
-workspace thread, inside its worktree. With it, the thread's first turn
-starts with that prompt and the command prints its Codex thread id and
-returns; follow up with ``codex queue --thread <id>`` or by opening the
-thread. The Imp door
-is the library (launch.py), not this command.
+Either form names an assignment; ``--detach`` picks the ending. Without it
+the command attaches: it ends as an interactive ``codex`` on the new
+workspace thread, inside its worktree, with the opening prompt typed as the
+first turn when there is one. With it the thread's first turn starts with
+that prompt, the Codex thread id is printed, and the command returns;
+follow up with ``codex queue --thread <id>`` or by opening the thread. The
+other entries are the MCP tool (mcp.py) for an agent and the library
+(launch.py) for an Imp.
 """
 
 from __future__ import annotations
@@ -35,7 +37,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     new.add_argument("--sourceset", help="sourceset to load when there is no bead")
     new.add_argument(
         "--prompt",
-        help="agent door: start the first turn with this prompt and return",
+        help="opening prompt for the first turn; appended to a bead's own",
+    )
+    new.add_argument(
+        "--detach",
+        action="store_true",
+        help="start the first turn with the opening prompt, print the Codex thread id and return; "
+        "without it, attach as an interactive codex",
     )
     return parser.parse_args(argv)
 
@@ -48,6 +56,9 @@ def main(argv: list[str] | None = None) -> int:
             workspace, bead_id=args.bead, name=args.name,
             sourceset=args.sourceset, prompt=args.prompt,
         )
+        # Detach sends the opening prompt as the first turn, so there must be
+        # one; checked here so a refused detach leaves no worktree behind.
+        opening = launch.opening_prompt(task.prompt) if args.detach else task.prompt
         thread, client = launch.prepare(task.name, task.sourceset, workspace=workspace)
     except (ValueError, LookupError, FileNotFoundError, FileExistsError) as error:
         print(f"workspace-thread new: {error}", file=sys.stderr)
@@ -56,10 +67,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"workspace-thread new: {' '.join(map(str, error.cmd))} exited {error.returncode}", file=sys.stderr)
         return 1
 
-    is_agent_door = args.prompt is not None
-    if is_agent_door:
+    if args.detach:
         try:
-            launch.start_turn(client, thread, task.prompt)
+            launch.start_turn(client, thread, opening)
+        except Exception as error:
+            print(
+                f"workspace-thread new: workspace thread {thread.thread_id} was created at "
+                f"{thread.worktree}, but its opening turn failed: {error}",
+                file=sys.stderr,
+            )
+            return 1
         finally:
             client.close()
         # The id, not the title: a title can be reused once its worktree is
@@ -69,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     client.close()
-    launch.attach(thread, task.prompt)
+    launch.attach(thread, opening)
     return 0  # unreachable: attach replaces the process
 
 

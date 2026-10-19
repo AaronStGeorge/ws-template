@@ -25,7 +25,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from workspace_thread import IMP_DOOR_SETTINGS, prepare, run_turn
+from workspace_thread import UNATTENDED_SETTINGS, prepare, run_turn
 
 SOURCESET = "ggml-staging-automation"
 FORK_PUSH_URL = "git@github.com:AaronStGeorge/llama.cpp.git"
@@ -133,7 +133,7 @@ def main():
     # remove it (`git worktree remove .workspace-threads/<name>`) before relaunching.
     thread, client = prepare(
         f"fix-ppl-{number}-{args.regime}", SOURCESET,
-        settings=IMP_DOOR_SETTINGS, log=sys.stderr,
+        settings=UNATTENDED_SETTINGS, log=sys.stderr,
     )
     workspace = thread.worktree
     print(f"run workspace: {workspace}", file=sys.stderr)

@@ -1,11 +1,12 @@
-"""The launcher: the steps every door runs, and the three endings.
+"""The launcher: the steps every entry runs, and the three endings.
 
 ``prepare`` is steps 1 to 5 of README.md: name the workspace thread, cut its
 worktree, load its sourceset, create and name its Codex thread on the
-daemon. The door then picks an ending: ``attach`` (human) replaces the
-process with an interactive ``codex`` on the thread; ``start_turn`` (agent) sends the
-opening prompt and returns; ``run_turn`` (Imp) sends it and follows the turn
-into a log until it completes.
+daemon. The entry then picks an ending: ``attach`` replaces the process
+with an interactive ``codex`` on the thread; ``start_turn`` (detach) sends
+the opening prompt and returns; ``run_turn`` (wait) sends it and follows the
+turn into a log until it completes. ``opening_prompt`` is the one check the
+two turn-starting endings share: there must be something to send.
 
 A bead enters only as a name and a label: ``prepare`` takes the sourceset
 name already resolved, so the bead lookup stays in bead.py and a caller
@@ -24,12 +25,13 @@ from . import codex, sourceset as sourcesets, worktree
 from .codex import Client, TurnResult
 from .workspace import main_checkout, slugify
 
-# The Imp door's Codex thread settings: no approvals, no sandbox, as the imps ran
-# under `codex exec --dangerously-bypass-approvals-and-sandbox`. A thread
-# that paused for approval would hang with no one watching, and the imp
-# design record's constraints ask for no hardening. The human door passes
-# nothing and gets the user's own Codex defaults.
-IMP_DOOR_SETTINGS: dict[str, Any] = {
+# The settings an Imp's thread runs under: no approvals, no sandbox, as the
+# imps ran under `codex exec --dangerously-bypass-approvals-and-sandbox`. No
+# one will answer an approval prompt in a Run, so a thread that paused for
+# one would hang, and the imp design record's constraints ask for no
+# hardening. The executable and the MCP tool pass nothing and get the user's
+# own Codex defaults.
+UNATTENDED_SETTINGS: dict[str, Any] = {
     "approvalPolicy": "never",
     "sandbox": "danger-full-access",
 }
@@ -56,8 +58,8 @@ def prepare(
     is; its slug names the worktree. For a bead id or an imp Run Id the two
     are equal. ``sourceset_name`` None leaves ``sources/`` empty, for
     workspace threads that work on the workspace itself (the overseer's checks). ``log``
-    receives git and daemon-start output. The connection is returned so a
-    door can send the opening turn on it; the human door closes it unused.
+    receives git and daemon-start output. The connection is returned so an
+    ending that starts a turn can send it; attach closes it unused.
     """
     # The title's provenance boundary: strip once for the Codex name, and
     # slugify once for the worktree, before anything is cut.
@@ -76,18 +78,18 @@ def prepare(
     client = Client.connect()
     document = client.start_thread(path, settings or {})
     client.set_thread_name(document["id"], name)
-    # Written to disk before any door returns, so `codex resume <id>` works
-    # on a Codex thread whose first turn has not happened yet (the human door's).
+    # Written to disk before any ending begins, so `codex resume <id>` works
+    # on a Codex thread whose first turn has not happened yet (attach's).
     client.persist_thread(document["id"])
     print(f"workspace thread {name}: {document['id']} in {path}", file=log)
     return WorkspaceThread(name, slug, path, document["id"]), client
 
 
 def attach(thread: WorkspaceThread, prompt: str | None = None) -> None:
-    """The human door's ending: become an interactive codex on the workspace thread.
+    """The attach ending: become an interactive codex on the workspace thread.
 
     ``prompt``, when given, is typed for the user as the first turn, so a
-    bead's workspace thread opened by a human starts the same way an agent's
+    workspace thread opened by a human starts the same way a detached one
     would.
     """
     os.chdir(thread.worktree)
@@ -97,10 +99,22 @@ def attach(thread: WorkspaceThread, prompt: str | None = None) -> None:
     os.execvp("codex", argv)
 
 
+def opening_prompt(prompt: str | None) -> str:
+    """The prompt an ending that starts a turn sends, else ValueError.
+
+    Attach never calls this: with nothing to send, the human types the
+    first turn. A bead's assignment always has a prompt; a named one has
+    it only if the caller gave it.
+    """
+    if not prompt:
+        raise ValueError("named launches require a nonempty prompt")
+    return prompt
+
+
 def start_turn(
     client: Client, thread: WorkspaceThread, prompt: str, output_schema: dict[str, Any] | None = None
 ) -> str:
-    """The agent door's ending: send the opening prompt, return the turn id."""
+    """The detach ending: send the opening prompt, return the turn id."""
     return client.start_turn(thread.thread_id, prompt, output_schema)
 
 
@@ -111,6 +125,6 @@ def run_turn(
     output_schema: dict[str, Any] | None = None,
     log=sys.stderr,
 ) -> TurnResult:
-    """The Imp door's ending: send the prompt and follow the turn to its end."""
+    """The wait ending: send the prompt and follow the turn to its end."""
     turn_id = start_turn(client, thread, prompt, output_schema)
     return client.wait_for_turn(thread.thread_id, turn_id, log)

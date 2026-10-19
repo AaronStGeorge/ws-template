@@ -30,7 +30,7 @@ import sys
 import time
 from pathlib import Path
 
-from workspace_thread import IMP_DOOR_SETTINGS, prepare, run_turn
+from workspace_thread import UNATTENDED_SETTINGS, prepare, run_turn
 
 # The sourceset the workspace thread loads: the staging clone plus the shared build
 # driver as its asset, which the agent runs as `sources/build.py`.
@@ -487,7 +487,7 @@ def main():
     # earlier Run of the same PR makes this fail: remove it (`git worktree
     # remove .workspace-threads/<slug>`) before relaunching under a fresh Run Id.
     thread, client = prepare(
-        slug, SOURCESET, settings=IMP_DOOR_SETTINGS, log=sys.stderr
+        slug, SOURCESET, settings=UNATTENDED_SETTINGS, log=sys.stderr
     )
     wsdir = thread.worktree
     sources = wsdir / "sources"

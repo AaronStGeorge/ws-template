@@ -1,4 +1,4 @@
-"""Resolve the assignment shared by the CLI and MCP launch doors.
+"""Resolve the assignment shared by the executable and the MCP tool.
 
 Beads supply a name, sourceset label, and opening instruction. Named work
 supplies those directly; its name is a free-text title whose shaping into a
@@ -31,6 +31,9 @@ def resolve(
     sourceset: str | None = None,
     prompt: str | None = None,
 ) -> Assignment:
+    # An empty prompt is no prompt, settled here at the boundary both
+    # entries share.
+    prompt = prompt or None
     has_bead = bead_id is not None
     has_name = name is not None
     if has_bead == has_name:
