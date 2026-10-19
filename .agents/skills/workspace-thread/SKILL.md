@@ -1,6 +1,6 @@
 ---
 name: workspace-thread
-description: Launch authorized bead-owned work or named tasks needing isolated sources and builds through workspace_threads.create_workspace_thread. Use when asked for a workspace thread or when delegating bead-owned repository work; coordinate the worker with Codex thread messaging.
+description: Launch authorized bead-owned work or named tasks needing isolated sources and builds through workspace_threads.create_workspace_thread. Use when asked for a workspace thread; coordinate the worker with Codex thread messaging.
 ---
 
 # Workspace threads
