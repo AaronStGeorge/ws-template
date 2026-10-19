@@ -13,8 +13,8 @@ STANDING_INSTRUCTIONS owns the repair procedure; the wrapper does not infer
 success from the agent's report. Preparation rationale lives beside the
 relevant operations below.
 
-The agent runs in a thread (lib/python/threadlib/README.md): a worktree of
-this workspace at .threads/<slug>, with the ggml-staging-automation sourceset
+The agent runs in a workspace thread (lib/python/workspace_thread/README.md):
+a worktree of this workspace at .workspace-threads/<slug>, with the ggml-staging-automation sourceset
 loaded into its sources/ and the clone moved onto the PR's head branch, hosted
 on Codex's daemon so it shows live in the agent command center. The clone
 uses GitHub state, independent of the main checkout's sources/. The Daemon's
@@ -30,9 +30,9 @@ import sys
 import time
 from pathlib import Path
 
-from threadlib import IMP_DOOR_SETTINGS, prepare, run_turn
+from workspace_thread import IMP_DOOR_SETTINGS, prepare, run_turn
 
-# The sourceset the thread loads: the staging clone plus the shared build
+# The sourceset the workspace thread loads: the staging clone plus the shared build
 # driver as its asset, which the agent runs as `sources/build.py`.
 SOURCESET = "ggml-staging-automation"
 
@@ -482,10 +482,10 @@ def main():
         text=True,
     ).stdout.strip()
 
-    # The thread is named after the slug, so it reads in the command center
-    # as the Run does in `impctl runs`. A worktree left by an earlier Run
-    # of the same PR makes this fail: remove it (`git worktree remove
-    # .threads/<slug>`) before relaunching under a fresh Run Id.
+    # The workspace thread is named after the slug, so it reads in the
+    # command center as the Run does in `impctl runs`. A worktree left by an
+    # earlier Run of the same PR makes this fail: remove it (`git worktree
+    # remove .workspace-threads/<slug>`) before relaunching under a fresh Run Id.
     thread, client = prepare(
         slug, SOURCESET, settings=IMP_DOOR_SETTINGS, log=sys.stderr
     )

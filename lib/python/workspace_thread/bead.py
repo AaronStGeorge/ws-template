@@ -1,12 +1,12 @@
 """What the launcher reads from a bead: its sourceset label.
 
-A bead names the sourceset its thread needs with the label
+A bead names the sourceset its workspace thread needs with the label
 ``sourceset:<name>``, set when the bead is created. That is the only thing
-the launcher takes from a bead; the thread's opening prompt names the bead
+the launcher takes from a bead; the workspace thread's opening prompt names the bead
 and the rest of the bead process is deliberately unspecified (README.md).
 
 ``br`` is run from the main checkout so it finds the workspace's store
-without any environment; from a thread's worktree it would find the same
+without any environment; from a workspace thread's worktree it would find the same
 store, but the launcher runs before the worktree exists.
 """
 

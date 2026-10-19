@@ -4,9 +4,10 @@
     python scripts/ws_load.py llama-cpp
 
 This is the by-hand door for the main checkout's ``sources/``, kept for
-review and human-in-the-loop work outside any thread. Thread worktrees are
-filled by threadlib (``lib/python/threadlib/README.md``), which also owns the
-loading itself; this script only empties ``sources/`` first and refuses when
+review and human-in-the-loop work outside any workspace thread. Workspace
+thread worktrees are filled by workspace_thread
+(``lib/python/workspace_thread/README.md``), which also owns the loading
+itself; this script only empties ``sources/`` first and refuses when
 anything there exists only locally, because here, and only here, a load can
 destroy work.
 """
@@ -19,7 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from threadlib import load_sourceset, read_sourceset
+from workspace_thread import load_sourceset, read_sourceset
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCES = REPO_ROOT / "sources"

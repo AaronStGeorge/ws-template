@@ -6,8 +6,9 @@ regime. The run's automation commit owns the initial harness and dependency
 pins. Codex owns reproduction, diagnosis and an optional llama.cpp repair,
 using the methodology in that checkout's HRX repository.
 
-The Run works in a thread (lib/python/threadlib/README.md): a worktree of
-this workspace at .threads/fix-ppl-<run>-<regime> with the
+The Run works in a workspace thread (lib/python/workspace_thread/README.md):
+a worktree of this workspace at .workspace-threads/fix-ppl-<run>-<regime>
+with the
 ggml-staging-automation sourceset loaded, its clone detached at the run's
 automation commit, and Codex hosted on its daemon so the investigation shows
 live in the agent command center. The worktree retains the prompt, run
@@ -24,7 +25,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from threadlib import IMP_DOOR_SETTINGS, prepare, run_turn
+from workspace_thread import IMP_DOOR_SETTINGS, prepare, run_turn
 
 SOURCESET = "ggml-staging-automation"
 FORK_PUSH_URL = "git@github.com:AaronStGeorge/llama.cpp.git"
@@ -129,7 +130,7 @@ def main():
         raise ValueError("source run has an invalid head_sha")
     # Named as the README's launch example names the Run Id. A worktree
     # left by an earlier Run of the same run and regime makes this fail;
-    # remove it (`git worktree remove .threads/<name>`) before relaunching.
+    # remove it (`git worktree remove .workspace-threads/<name>`) before relaunching.
     thread, client = prepare(
         f"fix-ppl-{number}-{args.regime}", SOURCESET,
         settings=IMP_DOOR_SETTINGS, log=sys.stderr,

@@ -1,14 +1,15 @@
-"""Launch a Codex thread in its own worktree of this workspace.
+"""Launch a workspace thread: a Codex thread in its own worktree of this workspace.
 
 The design record is README.md beside this file. The package is one launcher
-with three doors: ``thread new`` (cli.py) for a human or an agent at a shell,
-and the functions in launch.py for an Imp. All three run the same steps, from
-naming the thread to creating it on Codex's daemon; only the last step differs.
+with three doors: ``workspace-thread new`` (cli.py) for a human or an agent at
+a shell, and the functions in launch.py for an Imp. All three run the same
+steps, from naming the workspace thread to creating its Codex thread on the
+daemon; only the last step differs.
 """
 
 from .launch import (
     IMP_DOOR_SETTINGS,
-    Thread,
+    WorkspaceThread,
     TurnResult,
     attach,
     prepare,
@@ -21,7 +22,7 @@ from .workspace import main_checkout
 __all__ = [
     "IMP_DOOR_SETTINGS",
     "Sourceset",
-    "Thread",
+    "WorkspaceThread",
     "TurnResult",
     "attach",
     "load_sourceset",

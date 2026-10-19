@@ -10,7 +10,7 @@ passes the overseen Sigil, slot, and Codex settings:
 
 `--at`/`--tz` are the Sensor's. `--sigil`/`--model`/`--effort` pass
 through to the imp as the Run's args, plus `--run-id` so the imp can name
-the thread it opens after its own Run.
+the workspace thread and the Claude Code thread it opens after its own Run.
 
 Each Tick on a weekday (Monday to Friday in the zone) once the slot is
 past, it emits `{"sigil": "overseer", "id":

@@ -8,9 +8,9 @@ Codex is called only to diagnose failed CI and is instructed to change nothing.
 
 The wrapper gates CI on the pushed head before accepting a verdict. There is
 no repair or retry loop here: the fork validation is expected to have tested
-the same change already. The Run works in a thread
-(lib/python/threadlib/README.md): a worktree of this workspace at
-.threads/<slug> with the ggml-staging-automation sourceset loaded, so the
+the same change already. The Run works in a workspace thread
+(lib/python/workspace_thread/README.md): a worktree of this workspace at
+.workspace-threads/<slug> with the ggml-staging-automation sourceset loaded, so the
 clone is sources/ggml-staging-automation, and the diagnosis, when CI goes
 red, runs as a turn of that thread on Codex's daemon. Subprocesses use
 explicit working directories where needed.
@@ -24,7 +24,7 @@ import sys
 import time
 from pathlib import Path
 
-from threadlib import IMP_DOOR_SETTINGS, prepare, run_turn
+from workspace_thread import IMP_DOOR_SETTINGS, prepare, run_turn
 
 SOURCESET = "ggml-staging-automation"
 
@@ -210,11 +210,11 @@ def main():
         text=True,
     ).stdout.strip()
 
-    # The thread exists from here even when CI stays green and no turn is
+    # The workspace thread exists from here even when CI stays green and no turn is
     # ever sent: a thread with no turns is not listed in the command center,
     # and making the worktree is the same work either way. A worktree left
     # by an earlier Run of the same PR makes this fail; remove it
-    # (`git worktree remove .threads/<slug>`) before relaunching.
+    # (`git worktree remove .workspace-threads/<slug>`) before relaunching.
     thread, client = prepare(
         slug, SOURCESET, settings=IMP_DOOR_SETTINGS, log=sys.stderr
     )

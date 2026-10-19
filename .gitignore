@@ -1,4 +1,4 @@
-# Python stuff (.venv without a slash: a thread worktree's .venv is a symlink)
+# Python stuff (.venv without a slash: a workspace thread worktree's .venv is a symlink)
 __pycache__/
 .venv
 *.egg-info/
@@ -16,8 +16,8 @@ build/
 build/
 .imp/
 
-# Thread worktrees (lib/python/threadlib/README.md)
-.threads/
+# Workspace thread worktrees (lib/python/workspace_thread/README.md)
+.workspace-threads/
 
 # Claude worktrees
 .claude/worktrees/

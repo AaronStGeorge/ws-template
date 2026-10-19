@@ -1,9 +1,9 @@
 """The launcher: the steps every door runs, and the three endings.
 
-``prepare`` is steps 1 to 5 of README.md: name the thread, cut its worktree,
-load its sourceset, create and name the thread on Codex's daemon. The door
-then picks an ending: ``attach`` (human) replaces the process with an
-interactive ``codex`` on the thread; ``start_turn`` (agent) sends the
+``prepare`` is steps 1 to 5 of README.md: name the workspace thread, cut its
+worktree, load its sourceset, create and name its Codex thread on the
+daemon. The door then picks an ending: ``attach`` (human) replaces the
+process with an interactive ``codex`` on the thread; ``start_turn`` (agent) sends the
 opening prompt and returns; ``run_turn`` (Imp) sends it and follows the turn
 into a log until it completes.
 
@@ -24,7 +24,7 @@ from . import codex, sourceset as sourcesets, worktree
 from .codex import Client, TurnResult
 from .workspace import main_checkout, slugify
 
-# The Imp door's thread settings: no approvals, no sandbox, as the imps ran
+# The Imp door's Codex thread settings: no approvals, no sandbox, as the imps ran
 # under `codex exec --dangerously-bypass-approvals-and-sandbox`. A thread
 # that paused for approval would hang with no one watching, and the imp
 # design record's constraints ask for no hardening. The human door passes
@@ -36,11 +36,11 @@ IMP_DOOR_SETTINGS: dict[str, Any] = {
 
 
 @dataclass(frozen=True)
-class Thread:
+class WorkspaceThread:
     name: str  # the title, as Codex shows it
-    slug: str  # the worktree directory name under .threads/
+    slug: str  # the worktree directory name under .workspace-threads/
     worktree: Path
-    thread_id: str
+    thread_id: str  # the Codex thread id
 
 
 def prepare(
@@ -49,13 +49,13 @@ def prepare(
     settings: dict[str, Any] | None = None,
     workspace: Path | None = None,
     log=sys.stderr,
-) -> tuple[Thread, Client]:
-    """Steps 1 to 5; returns the thread and the daemon connection that made it.
+) -> tuple[WorkspaceThread, Client]:
+    """Steps 1 to 5; returns the workspace thread and the daemon connection that made it.
 
-    ``name`` is the thread's title, free text that Codex shows as is; its
-    slug names the worktree. For a bead id or an imp Run Id the two are
-    equal. ``sourceset_name`` None leaves ``sources/`` empty, for threads
-    that work on the workspace itself (the overseer's checks). ``log``
+    ``name`` is the workspace thread's title, free text that Codex shows as
+    is; its slug names the worktree. For a bead id or an imp Run Id the two
+    are equal. ``sourceset_name`` None leaves ``sources/`` empty, for
+    workspace threads that work on the workspace itself (the overseer's checks). ``log``
     receives git and daemon-start output. The connection is returned so a
     door can send the opening turn on it; the human door closes it unused.
     """
@@ -66,10 +66,10 @@ def prepare(
     ws = workspace if workspace is not None else main_checkout()
     chosen = sourcesets.read_sourceset(ws, sourceset_name) if sourceset_name else None
 
-    print(f"thread {name}: cutting worktree", file=log)
+    print(f"workspace thread {name}: cutting worktree", file=log)
     path = worktree.create(ws, name, slug, log)
     if chosen is not None:
-        print(f"thread {name}: loading sourceset {chosen.name}", file=log)
+        print(f"workspace thread {name}: loading sourceset {chosen.name}", file=log)
         sourcesets.load_sourceset(chosen, path, log)
 
     codex.ensure_daemon(log)
@@ -77,17 +77,18 @@ def prepare(
     document = client.start_thread(path, settings or {})
     client.set_thread_name(document["id"], name)
     # Written to disk before any door returns, so `codex resume <id>` works
-    # on a thread whose first turn has not happened yet (the human door's).
+    # on a Codex thread whose first turn has not happened yet (the human door's).
     client.persist_thread(document["id"])
-    print(f"thread {name}: {document['id']} in {path}", file=log)
-    return Thread(name, slug, path, document["id"]), client
+    print(f"workspace thread {name}: {document['id']} in {path}", file=log)
+    return WorkspaceThread(name, slug, path, document["id"]), client
 
 
-def attach(thread: Thread, prompt: str | None = None) -> None:
-    """The human door's ending: become an interactive codex on the thread.
+def attach(thread: WorkspaceThread, prompt: str | None = None) -> None:
+    """The human door's ending: become an interactive codex on the workspace thread.
 
     ``prompt``, when given, is typed for the user as the first turn, so a
-    bead thread opened by a human starts the same way an agent's would.
+    bead's workspace thread opened by a human starts the same way an agent's
+    would.
     """
     os.chdir(thread.worktree)
     argv = ["codex", "resume", thread.thread_id]
@@ -97,7 +98,7 @@ def attach(thread: Thread, prompt: str | None = None) -> None:
 
 
 def start_turn(
-    client: Client, thread: Thread, prompt: str, output_schema: dict[str, Any] | None = None
+    client: Client, thread: WorkspaceThread, prompt: str, output_schema: dict[str, Any] | None = None
 ) -> str:
     """The agent door's ending: send the opening prompt, return the turn id."""
     return client.start_turn(thread.thread_id, prompt, output_schema)
@@ -105,7 +106,7 @@ def start_turn(
 
 def run_turn(
     client: Client,
-    thread: Thread,
+    thread: WorkspaceThread,
     prompt: str,
     output_schema: dict[str, Any] | None = None,
     log=sys.stderr,

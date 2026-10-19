@@ -6,13 +6,14 @@ description: Launch authorized bead-owned work or named tasks needing isolated s
 # Workspace threads
 
 Use the `workspace_threads` MCP server's `create_workspace_thread` tool.
-It runs the same launcher as `thread new`; each thread receives a detached
-workspace worktree and fresh clones of its sourceset repositories.
+It runs the same launcher as `workspace-thread new`; each workspace thread
+receives a detached worktree of the workspace and fresh clones of its
+sourceset repositories.
 
-Use this launcher for workspace threads. Regular Codex threads and subagents
-inherit the caller's workspace; they do not provision a workspace worktree
-or load a sourceset. They remain useful for work intended to share the
-current checkout, such as a read-only review.
+Use this launcher for workspace threads. Ordinary threads and subagents
+inherit the caller's checkout; they do not provision a worktree of the
+workspace or load a sourceset. They remain useful for work intended to
+share the current checkout, such as a read-only review.
 
 - For a bead, pass `bead_id`. Its `sourceset:<name>` label selects the
   sourceset. The child is told to read the bead; `prompt` adds context.
@@ -41,10 +42,10 @@ worker's ID, reviews its evidence, and closes the bead. Workers report
 progress, blockers, and results back to the supplied parent thread.
 
 Fresh sourceset clones do not contain local uncommitted work. Make required
-source changes available before launch. Workspace worktrees start at HEAD,
-so commit required workspace instructions and assets first. Existing
+source changes available before launch. Workspace thread worktrees start at
+HEAD, so commit required workspace instructions and assets first. Existing
 worktree names are refused; inspect a failed launch before retrying rather
 than removing its files blindly.
 
 Server setup and launch guarantees live in
-[threadlib's README](../../../lib/python/threadlib/README.md).
+[the workspace_thread README](../../../lib/python/workspace_thread/README.md).

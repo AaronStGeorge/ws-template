@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""End-to-end checks of threadlib's three doors against the real Codex daemon.
+"""End-to-end checks of workspace_thread's three doors against the real Codex daemon.
 
 THIS TEST IS VERY EXPENSIVE: RUN IT ONLY AS A FINAL VERIFICATION. Two of the
 three doors are defined by starting a turn, and a turn is a real model call
-billed to the user's Codex account. It also creates real threads on the
+billed to the user's Codex account. It also creates real Codex threads on the
 user's daemon, which show up in the command center while the test runs. It
-is skipped unless ``THREADLIB_E2E=1`` is set, so nothing here runs by
+is skipped unless ``WORKSPACE_THREAD_E2E=1`` is set, so nothing here runs by
 accident; set it only once a change to the launcher is otherwise complete.
 
 Everything is real: Codex's daemon (thread creation, naming, turns,
@@ -17,9 +17,9 @@ replaced by an interactive session; everything up to that point, including
 the argv it would exec, is checked for real.
 
 The workspace is a temporary clone with its own ``br`` store and a local
-sample repository as its sourceset, so the repo's own ``.threads/`` and
+sample repository as its sourceset, so the repo's own ``.workspace-threads/`` and
 ``.beads/`` are never touched and the bead vanishes with the directory
-(``br delete`` would only leave a tombstone). Every thread the test makes
+(``br delete`` would only leave a tombstone). Every Codex thread the test makes
 is deleted from the daemon in cleanup, by id, whether the test passed or
 not; a thread with a running turn is waited on first so the delete is of
 an idle thread.
@@ -40,8 +40,8 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from threadlib import IMP_DOOR_SETTINGS, cli, prepare, run_turn
-from threadlib.codex import Client, socket_path
+from workspace_thread import IMP_DOOR_SETTINGS, cli, prepare, run_turn
+from workspace_thread.codex import Client, socket_path
 
 ONE_WORD_PROMPT = "Reply with exactly the word OK and do nothing else."
 TURN_TIMEOUT_SECONDS = 300
@@ -97,7 +97,7 @@ def wait_until_idle(client: Client, thread_id: str) -> dict:
         time.sleep(2)
 
 
-@unittest.skipUnless(os.environ.get("THREADLIB_E2E") == "1", "set THREADLIB_E2E=1 to run against the real daemon")
+@unittest.skipUnless(os.environ.get("WORKSPACE_THREAD_E2E") == "1", "set WORKSPACE_THREAD_E2E=1 to run against the real daemon")
 @unittest.skipUnless(shutil.which("codex") and shutil.which("br"), "needs codex and br on PATH")
 class DoorTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -110,7 +110,7 @@ class DoorTests(unittest.TestCase):
             repo.mkdir()
             git(repo, "init")
             git(repo, "config", "user.email", "test@example.invalid")
-            git(repo, "config", "user.name", "Thread e2e test")
+            git(repo, "config", "user.name", "Workspace thread e2e test")
             (repo / "README.md").write_text("fixture\n")
             git(repo, "add", "README.md")
             git(repo, "commit", "-m", "fixture")
@@ -120,7 +120,7 @@ class DoorTests(unittest.TestCase):
         git(self.workspace, "add", "sourcesets")
         git(self.workspace, "commit", "-m", "sourceset")
         br(self.workspace, "init", "--prefix", "e2e", "--quiet")
-        # `thread new` finds its workspace from the current directory, as a
+        # `workspace-thread new` finds its workspace from the current directory, as a
         # human's shell would, so run from the fixture rather than redirecting
         # discovery; attach() chdirs again into the worktree. Either way,
         # put the test back afterwards.
@@ -151,14 +151,14 @@ class DoorTests(unittest.TestCase):
         created = json.loads(br(self.workspace, "create", "e2e: the [human] door", "-l", "sourceset:sample", "--json"))
         bead_id = created["id"]
         execs: list[list[str]] = []
-        with patch("threadlib.launch.os.execvp", side_effect=lambda file, argv: execs.append(argv)):
+        with patch("workspace_thread.launch.os.execvp", side_effect=lambda file, argv: execs.append(argv)):
             self.assertEqual(cli.main(["new", bead_id]), 0)
         self.assertEqual(len(execs), 1)
         codex, resume, thread_id, opening = execs[0]
         self.delete_thread_in_cleanup(thread_id)
         self.assertEqual((codex, resume), ("codex", "resume"))
         self.assertIn(f"br show {bead_id} --json", opening)
-        worktree = self.workspace / ".threads" / bead_id
+        worktree = self.workspace / ".workspace-threads" / bead_id
         self.assertEqual((worktree / "sources/sample/README.md").read_text(), "fixture\n")
         self.assertEqual(Path.cwd(), worktree)
         thread = self.assert_thread_on_daemon(thread_id, bead_id, worktree)
@@ -177,7 +177,7 @@ class DoorTests(unittest.TestCase):
         self.assertEqual(result, 0)
         thread_id = stdout.getvalue().strip()
         self.delete_thread_in_cleanup(thread_id)
-        worktree = self.workspace / ".threads" / slug
+        worktree = self.workspace / ".workspace-threads" / slug
         self.assertTrue((worktree / "sources/sample/README.md").is_file())
         client = Client.connect()
         try:
@@ -201,7 +201,7 @@ class DoorTests(unittest.TestCase):
                 client.close()
         run_log = log_path.read_text()
         self.assertEqual(thread.slug, run_id, "a Run Id is its own slug")
-        self.assertEqual(thread.worktree, self.workspace / ".threads" / run_id)
+        self.assertEqual(thread.worktree, self.workspace / ".workspace-threads" / run_id)
         self.assertEqual(result.status, "completed", run_log)
         self.assertIsNone(result.error)
         self.assertIn("OK", result.last_agent_message or "", run_log)

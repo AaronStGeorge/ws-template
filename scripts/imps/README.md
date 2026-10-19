@@ -21,8 +21,8 @@ impctl down
 Daemon if needed, wait for it, apply each named Manifest. Rerunning it is
 free, and a Sigil or Watch added by hand survives it. Run it with the
 workspace `.envrc` in effect, so that `python3` is the venv's and the
-Imps can import threadlib, and with `codex` logged in: every Imp's agent
-is a thread on Codex's daemon. `down` stops the
+Imps can import workspace_thread, and with `codex` logged in: every Imp's
+agent is a workspace thread on Codex's daemon. `down` stops the
 Daemon and with it every Watch, including a one-shot armed mid-Run;
 re-arming one is a human step. Each loop's README lists what its Imps
 need logged in or on `PATH`.
@@ -42,15 +42,15 @@ A loop is directory-per-imp: each Imp's entry point is its `imp.py`, the
 Sensor that launches it is the `sensor.py` beside it, and
 its private resources sit alongside. Scripts two of a loop's Imps share
 sit one level up, in the loop directory. Each Imp resolves shared scripts
-relative to its own file and copies them into its thread's worktree; Imps
+relative to its own file and copies them into its workspace thread's worktree; Imps
 never import across directories, though all of them import the workspace
 library under `lib/python/`.
 
-An Imp that runs an agent runs it as a thread through
-[threadlib](../../lib/python/threadlib/README.md): a worktree of this
-workspace at `.threads/<name>`, with a sourceset loaded into its
-`sources/`, hosted on Codex's daemon so it shows live in the agent command
-center beside every human session. The Run log carries the thread's
+An Imp that runs an agent runs it as a workspace thread through
+[workspace_thread](../../lib/python/workspace_thread/README.md): a worktree
+of this workspace at `.workspace-threads/<name>`, with a sourceset loaded
+into its `sources/`, hosted on Codex's daemon so it shows live in the agent
+command center beside every human session. The Run log carries the thread's
 transcript; the thread outlives the Run and can be opened or messaged
 (`codex queue --thread <name>`) afterwards.
 
@@ -133,11 +133,11 @@ Rules the existing loops learned:
   Humans can invoke these executables directly, so their entry points check
   user arguments. Repository-controlled arguments do not become untrusted
   merely because the Daemon transports them through argv.
-- Name threads and branches after the Run Id. An Imp is never told
+- Name workspace threads and branches after the Run Id. An Imp is never told
   its Run Id, but a slug derived the same way the Sensor derives
-  the Id traces everything the Run made back to it. A thread's worktree
+  the Id traces everything the Run made back to it. A workspace thread's worktree
   stays after the Run; relaunching the same slug means removing it first
-  (`git worktree remove .threads/<slug>`).
+  (`git worktree remove .workspace-threads/<slug>`).
 - Arm one-shot Watches with an absolute path to the Sensor. Nothing
   shares a cwd with anything except the Daemon.
 - Imps and Sensors are executables. Set the exec bit and let git track

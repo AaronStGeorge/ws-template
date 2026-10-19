@@ -258,9 +258,10 @@ does: it reads the log of the Run it checks) reads them.
 - "Which loops does this workspace run" is answered by which Manifests
   `up` applies, not by a config layer. The echo loop is the reference
   example and the one the chain check drives.
-- An Imp that runs an agent runs it as a thread on Codex's daemon, in a
-  worktree of the workspace, through
-  [threadlib](../lib/python/threadlib/README.md), so Imp-started and
-  human-started sessions are the same thing in Codex's agent command
-  center. The Imp process contract is unchanged by this: the thread is
-  interior to the Imp, and its transcript lands in the Run log.
+- An Imp that runs an agent runs it as a workspace thread: a thread on
+  Codex's daemon in a worktree of the workspace, through
+  [workspace_thread](../lib/python/workspace_thread/README.md), so
+  Imp-started and human-started threads are the same thing in Codex's agent
+  command center. The Imp process contract is unchanged by this: the
+  workspace thread is interior to the Imp, and its transcript lands in the
+  Run log.

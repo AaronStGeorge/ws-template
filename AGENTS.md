@@ -21,8 +21,8 @@ the drafted requirements before designing against them.
 When delegating bead-owned repository work or named work that needs its own
 sources and builds, read and use the
 [workspace-thread skill](.agents/skills/workspace-thread/SKILL.md). Launch with
-`workspace_threads.create_workspace_thread`; regular Codex thread and subagent
-creation does not provision a workspace worktree or sourceset.
+`workspace_threads.create_workspace_thread`; ordinary thread and subagent
+creation does not provision a worktree of the workspace or a sourceset.
 
 ## Running HRX on a GPU
 

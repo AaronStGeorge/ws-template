@@ -10,7 +10,7 @@ the clones (usually a ``build.py``)::
 branch. Assets are symlinked rather than copied so that edits made through
 ``sources/`` land in the tracked ``assets/`` directory.
 
-Loading always targets an empty ``sources/``: a thread's worktree starts
+Loading always targets an empty ``sources/``: a workspace thread's worktree starts
 with one, and the by-hand door (``scripts/ws_load.py``) empties the main
 checkout's before calling in here. Clones are full clones every time; a
 cache is a later addition that would live inside ``clone`` alone.

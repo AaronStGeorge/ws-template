@@ -1,7 +1,7 @@
-"""One MCP launch tool, backed by the same launcher as ``thread new``.
+"""One MCP launch tool, backed by the same launcher as ``workspace-thread new``.
 
 The server is bound to a main workspace at startup, independent of which
-thread calls it. Only creation belongs here: Codex's built-in thread tools
+Codex thread calls it. Only creation belongs here: Codex's built-in thread tools
 own reading, messaging, and waiting. All launcher progress goes to stderr
 so stdout remains the MCP stdio transport.
 """
@@ -18,7 +18,7 @@ from . import assignment, launch
 from .workspace import main_checkout
 
 
-class CreatedThread(TypedDict):
+class CreatedWorkspaceThread(TypedDict):
     thread_id: str
     turn_id: str
     name: str
@@ -33,7 +33,7 @@ def create(
     sourceset: str | None = None,
     prompt: str | None = None,
     parent_thread_id: str | None = None,
-) -> CreatedThread:
+) -> CreatedWorkspaceThread:
     task = assignment.resolve(
         workspace, bead_id=bead_id, name=name, sourceset=sourceset, prompt=prompt
     )
@@ -64,12 +64,12 @@ def create(
         turn_id = launch.start_turn(client, thread, opening)
     except Exception as error:
         raise RuntimeError(
-            f"thread {thread.thread_id} was created at {thread.worktree}, "
+            f"workspace thread {thread.thread_id} was created at {thread.worktree}, "
             f"but its opening turn failed: {error}"
         ) from error
     finally:
         client.close()
-    return CreatedThread(
+    return CreatedWorkspaceThread(
         thread_id=thread.thread_id,
         turn_id=turn_id,
         name=thread.name,
@@ -87,7 +87,7 @@ def make_server(workspace: Path) -> FastMCP:
         sourceset: str | None = None,
         prompt: str | None = None,
         parent_thread_id: str | None = None,
-    ) -> CreatedThread:
+    ) -> CreatedWorkspaceThread:
         """Start authorized work in an isolated workspace thread and return its IDs.
 
         Give bead_id OR name. A bead supplies its sourceset label and opening

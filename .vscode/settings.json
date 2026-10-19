@@ -1,7 +1,7 @@
 {
-  // Thread worktrees are full checkouts; .gitignore alone is not reliable for
+  // Workspace thread worktrees are full checkouts; .gitignore alone is not reliable for
   // search because each worktree is its own git repository.
   "search.exclude": {
-    "**/.threads": true
+    "**/.workspace-threads": true
   }
 }

@@ -4,7 +4,7 @@ Beads supply a name, sourceset label, and opening instruction. Named work
 supplies those directly; its name is a free-text title whose shaping into a
 worktree slug belongs to launch.prepare. This boundary owns their mutually
 exclusive inputs; launch.py continues to own creating the worktree and Codex
-session.
+thread.
 """
 
 from __future__ import annotations

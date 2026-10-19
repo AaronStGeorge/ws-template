@@ -1,5 +1,5 @@
 [mcp_servers.workspace_threads]
 command = "bash"
 # Resolve the main checkout from either it or one of its linked worktrees.
-args = ["-c", 'set -eu; workspace_git_dir=$(git rev-parse --path-format=absolute --git-common-dir); workspace_root=$(dirname "$workspace_git_dir"); exec "$workspace_root/.venv/bin/python" -m threadlib.mcp --workspace "$workspace_root"']
+args = ["-c", 'set -eu; workspace_git_dir=$(git rev-parse --path-format=absolute --git-common-dir); workspace_root=$(dirname "$workspace_git_dir"); exec "$workspace_root/.venv/bin/python" -m workspace_thread.mcp --workspace "$workspace_root"']
 tool_timeout_sec = 600

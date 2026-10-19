@@ -14,12 +14,13 @@ version asked the agent to survey all Runs and summoned for an unrelated
 standalone failure. Selecting one root avoids a growing list of exclusions.
 
 With no root Run, the Imp succeeds without a check. Otherwise a Codex check,
-run as a thread named after --run-id (lib/python/threadlib/README.md: a
-worktree of this workspace with empty sources/, hosted on Codex's daemon),
+run as a workspace thread named after --run-id
+(lib/python/workspace_thread/README.md: a worktree of this workspace with
+empty sources/, hosted on Codex's daemon),
 returns needs_human, headline, and findings. A positive verdict opens a Claude
 Code thread named after --run-id, instructed to investigate, push one headline,
-and await direction without making changes. Unusable Codex opens a thread
-about the unchecked Run instead. Exit 0 means the check or escalation completed,
+and await direction without making changes. Unusable Codex opens a Claude
+Code thread about the unchecked Run instead. Exit 0 means the check or escalation completed,
 not that the root Run needs no attention; listing, check, and thread failures
 exit nonzero.
 
@@ -49,7 +50,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from threadlib import IMP_DOOR_SETTINGS, prepare, run_turn
+from workspace_thread import IMP_DOOR_SETTINGS, prepare, run_turn
 
 # The Imp process contract makes cwd the workspace root. Bare `impctl`
 # resolves the Daemon from the same cwd, so the Runs listed and the paths
@@ -262,9 +263,9 @@ def codex_lapsed_verdict(sigil, run):
 def run_check(args, root_run):
     """The codex check, schema-forced to the verdict.
 
-    The check is a thread named after this Run, with no sourceset: it reads
-    the workspace's own .imp/ and sources, all by absolute path. The model
-    and effort the Manifest configures ride on the thread's settings.
+    The check is a workspace thread named after this Run, with no sourceset:
+    it reads the workspace's own .imp/ and sources, all by absolute path. The
+    model and effort the Manifest configures ride on the thread's settings.
     """
     prompt = CHECK_PROMPT.format(
         sigil=args.sigil,

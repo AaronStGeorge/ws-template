@@ -3,7 +3,7 @@
 Threads live on Codex's daemon rather than in a ``codex exec`` child because
 only daemon-hosted threads show a live status in the agent command center,
 can be opened while running, and can be reached by ``codex queue``
-(README.md, "Why the thread lives on Codex's daemon"). The daemon listens on
+(README.md, "Why the workspace thread lives on Codex's daemon"). The daemon listens on
 ``$CODEX_HOME/app-server-control/app-server-control.sock`` and speaks
 JSON-RPC 2.0 over WebSocket; ``codex app-server daemon start`` starts it when
 it is not running and is a no-op when it is.
@@ -25,7 +25,7 @@ from typing import Any, Iterator
 
 from websockets.sync.client import ClientConnection, unix_connect
 
-CLIENT_INFO = {"name": "threadlib", "title": "ws-template threadlib", "version": "0.1.0"}
+CLIENT_INFO = {"name": "workspace_thread", "title": "ws-template workspace_thread", "version": "0.1.0"}
 
 # Codex's daemon prints JSON on stdout for `daemon start`; the socket path is
 # in it, but it is also a fixed location under CODEX_HOME, read directly so

@@ -11,17 +11,17 @@ The loop has two Imps of its own and two standing Watches.
 llama.cpp, opens the upstream PR and arms the wait for it.
 `repoint-llama-bump` consumes the merged upstream when that wait fires.
 The workspace's [overseer](../../../overseer/imp.py) checks the newest
-`fix-llama-bump` Run every weekday morning and opens a thread for the
-human when one is needed. `sync_pr_body.py` keeps the bump PR's
+`fix-llama-bump` Run every weekday morning and opens a Claude Code thread
+for the human when one is needed. `sync_pr_body.py` keeps the bump PR's
 description truthful while the bump Imps move its llama.cpp pin. The
 [ggml-staging-automation sourceset](../../../../../sourcesets/ggml-staging-automation/sourceset.json)
 and its `build.py` asset provide the clone and local build infrastructure
 for the fix Imp, and the project's
 [known-bad-runners.json](../../known-bad-runners.json) names the CI
 runners whose failures the fix Imp reruns instead of repairing. Each bump
-Imp works in a thread of its own
-([threadlib](../../../../../lib/python/threadlib/README.md)): a worktree
-at `.threads/<run-id>` whose `sources/ggml-staging-automation` is a fresh
+Imp works in a workspace thread of its own
+([workspace_thread](../../../../../lib/python/workspace_thread/README.md)): a
+worktree at `.workspace-threads/<run-id>` whose `sources/ggml-staging-automation` is a fresh
 clone from GitHub, independent of the main checkout's `sources/`, and whose
 agent runs on Codex's daemon.
 
@@ -40,7 +40,7 @@ impctl up --manifest scripts/imps/ggml-staging-automation/loops/bump-automation/
 Prerequisites: `gh`, `codex`, and `claude` logged in, and the workspace
 `.envrc` in effect when `up` runs, because every Run inherits the Daemon's
 environment: the fix Imp invokes `impctl` bare, and every Imp's `python3`
-must be the venv's to import threadlib.
+must be the venv's to import workspace_thread.
 
 ## `fix-llama-bump`
 
@@ -113,12 +113,12 @@ weeks between uses and its login lapses; the Run fails with a log line
 saying so, and the human runs `codex login` and relaunches under a fresh
 Run Id.
 
-The thread, its worktree `.threads/fix-bump-pr-<N>` and the numbered fork
-branches share the prefix `fix-bump-pr-<N>`, matching the automatic Run Id.
+The workspace thread, its worktree `.workspace-threads/fix-bump-pr-<N>` and
+the numbered fork branches share the prefix `fix-bump-pr-<N>`, matching the automatic Run Id.
 Preparation details and their rationale are in [imp.py](fix-llama-bump/imp.py).
-A manual Run Id may differ from this PR-derived prefix, but the thread name
+A manual Run Id may differ from this PR-derived prefix, but the workspace thread's name
 does not: relaunching a PR's fix means removing the earlier Run's worktree
-first (`git worktree remove .threads/fix-bump-pr-<N>`), or the Run fails
+first (`git worktree remove .workspace-threads/fix-bump-pr-<N>`), or the Run fails
 saying so.
 
 ## `repoint-llama-bump`
@@ -149,7 +149,8 @@ whose exit code determines success. There is no automatic retry.
 Red sends codex a diagnosis turn only, under an explicit change-nothing
 rule; the diagnosis is printed
 to the Run log and the Run exits nonzero so it is flagged as needing
-attention. The thread and its worktree are named `fix-bump-pr-<N>-repoint`,
+attention. The workspace thread and its worktree are named
+`fix-bump-pr-<N>-repoint`,
 matching the automatic Run Id, and exist from the start of the Run even
 when CI stays green and no turn is sent; a manual Run Id may differ, and a
 relaunch removes the earlier worktree first.
@@ -183,7 +184,7 @@ The loop has no overseer of its own. Its Manifest declares a standing
 Watch on the workspace's overseer with `--sigil fix-llama-bump`, so each
 weekday slot launches one Run,
 `oversee-fix-llama-bump-<YYYY-MM-DD>-<HHMM>`, that checks the newest
-`fix-llama-bump` Run. How it checks, the thread it opens, and what it
+`fix-llama-bump` Run. How it checks, the Claude Code thread it opens, and what it
 cannot see are in [its header](../../../overseer/imp.py).
 
 The overseer starts from the fix Run and follows what that Run's log
