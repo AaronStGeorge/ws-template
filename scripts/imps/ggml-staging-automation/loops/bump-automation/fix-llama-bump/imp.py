@@ -2,8 +2,7 @@
 """Repair a bump PR in an isolated clone, then verify its CI verdict.
 
 The paired sensor.py supplies the bump PR URL. ../README.md defines the
-loop's boundaries and its "When this loop needs a human" judgment, which
-the overseer reads through this header.
+loop's boundaries and its "When this loop needs a human" judgment.
 
 This wrapper first reruns checks that failed only on known-bad runners, and
 starts a repair only if the PR is still red. It then prepares the agent's
@@ -553,7 +552,7 @@ def main():
     if not turn_finished:
         raise SystemExit(f"codex turn {result.status}: {result.error}")
 
-    # The overseer follows the upstream PR and Watch from this logged handoff.
+    # The Run log carries the upstream PR and the Watch armed from this handoff.
     handoff = json.loads(result.last_agent_message)
     print(json.dumps(handoff, indent=2), file=sys.stderr)
 

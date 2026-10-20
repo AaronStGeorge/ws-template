@@ -203,8 +203,8 @@ resolve from the workspace root.
 
 **The durable record.** Run state lives in the Daemon's memory; the files
 under `.imp/`, laid out in [tools/README.md](../tools/README.md), are the
-record that outlives it, and an Imp that needs to look back (the overseer
-does: it reads the log of the Run it checks) reads them.
+record that outlives it, and an Imp or a human that needs to look back
+reads them.
 
 ### Decisions in force
 
@@ -231,8 +231,7 @@ does: it reads the log of the Run it checks) reads them.
   re-emits a past Id after a restart re-runs it; accepted.
 - Run observation is poll-only; the Daemon never pushes.
 - A Run records when its Id was claimed, and the listing stays unordered.
-  Ordering is a Client's question, answered by sorting on `started`; the
-  overseer, which needs the newest Run of a Sigil, is its one customer.
+  Ordering is a Client's question, answered by sorting on `started`.
 - Re-applying a Manifest is free because inscribe and watch are
   idempotent: the same name at the same path is a no-op (a different path
   replaces, and the response says so), and the same argv with the same
@@ -244,8 +243,7 @@ does: it reads the log of the Run it checks) reads them.
   the Watches and the Daemon no longer exists.
 - Ticks happen on a fixed global interval, a compile-time default, plus on
   request, with no startup pass since the Daemon starts empty. Per-Watch
-  schedules are not a thing: time-slot logic belongs in the Sensor,
-  as the overseer's Sensor shows.
+  schedules are not a thing: time-slot logic belongs in the Sensor.
 - A Watch is matched on exact argv plus the one-shot flag, so editing a
   standing Watch's argv in a Manifest and re-running `up` adds a second
   Watch beside the old one, removed by hand. Reconciling by executable path

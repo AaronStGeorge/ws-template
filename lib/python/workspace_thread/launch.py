@@ -60,7 +60,7 @@ def prepare(
     ``name`` is the workspace thread's title, free text that Codex shows as
     is; its slug names the worktree. For a bead id or an imp Run Id the two
     are equal. ``sourceset_name`` None leaves ``sources/`` empty, for
-    workspace threads that work on the workspace itself (the overseer's checks).
+    workspace threads that work on the workspace itself.
     ``sourcesets_dir`` is where the sourceset is read from, the workspace's
     ``sourcesets/`` unless the entry was told otherwise. ``log`` receives git
     and daemon-start output. The connection is returned so an ending that
