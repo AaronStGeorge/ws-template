@@ -2,8 +2,8 @@
 """Restore a bump PR to canonical llama.cpp after an upstream merge.
 
 The paired sensor.py is armed by the fix Imp. ../README.md defines the
-arguments, outcomes, and "When this loop needs a human" judgment used by the
-overseer. Repointing uses Git index edits without initializing submodules;
+arguments, outcomes, and "When this loop needs a human" judgment.
+Repointing uses Git index edits without initializing submodules;
 Codex is called only to diagnose failed CI and is instructed to change nothing.
 
 The wrapper gates CI on the pushed head before accepting a verdict. There is

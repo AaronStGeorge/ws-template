@@ -208,8 +208,7 @@ Every entry runs the same steps; only the ending differs.
    the sourceset package, named by the bead's `sourceset:` label or the
    `--sourceset` flag and read from the workspace's `sourcesets/` unless
    the entry was given another directory; none leaves `sources/` empty,
-   for workspace threads that work on the workspace itself (the overseer's
-   checks).
+   for workspace threads that work on the workspace itself.
 4. **Bead.** Nothing to wire. `br` run inside a linked worktree that has no
    `.beads/` of its own resolves to the primary checkout's `.beads/`
    through the worktree's `.git` file (tested with br 0.7.4 from a worktree

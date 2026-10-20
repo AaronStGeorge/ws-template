@@ -6,13 +6,11 @@ and this README is the authoritative record of each executable's boundary.
 The loop's layout follows [scripts/imps/README.md](../../../README.md); it
 is one loop of the [ggml-staging-automation](../../README.md) project.
 
-The loop has two Imps of its own and two standing Watches.
+The loop has two Imps and one standing Watch.
 `fix-llama-bump` repairs a red bump PR and, when it had to change
 llama.cpp, opens the upstream PR and arms the wait for it.
 `repoint-llama-bump` consumes the merged upstream when that wait fires.
-The workspace's [overseer](../../../overseer/imp.py) checks the newest
-`fix-llama-bump` Run every weekday morning and opens a Claude Code thread
-for the human when one is needed. `sync_pr_body.py` keeps the bump PR's
+`sync_pr_body.py` keeps the bump PR's
 description truthful while the bump Imps move its llama.cpp pin. The
 [ggml-staging-automation sourceset](../../../../../sourcesets/ggml-staging-automation/sourceset.json)
 and its `build.py` asset provide the clone and local build infrastructure
@@ -26,11 +24,7 @@ clone from GitHub, independent of the main checkout's `sources/`, and whose
 agent runs on Codex's daemon.
 
 The Manifest, [bump-loop.json](bump-loop.json), inscribes the loop's two
-Sigils and the workspace's `overseer`, and declares two standing Watches.
-One is the fix Sensor with no arguments. The other is the overseer's
-Sensor with the Sigil to oversee (`fix-llama-bump`), its slot
-(`09:00 America/Boise`, weekdays, a few hours after the daily bump
-workflow at 11:00 UTC), and the codex model and effort for the check.
+Sigils and declares one standing Watch, the fix Sensor with no arguments.
 Bring it up with:
 
 ```sh
@@ -178,26 +172,14 @@ launch. Any other state, CLOSED included, is "not yet": a closed-unmerged
 upstream PR keeps the Watch pending forever, on purpose, where the human
 sees it in `impctl watches` and judges.
 
-## The overseer
-
-The loop has no overseer of its own. Its Manifest declares a standing
-Watch on the workspace's overseer with `--sigil fix-llama-bump`, so each
-weekday slot launches one Run,
-`oversee-fix-llama-bump-<YYYY-MM-DD>-<HHMM>`, that checks the newest
-`fix-llama-bump` Run. How it checks, the Claude Code thread it opens, and what it
-cannot see are in [its header](../../../overseer/imp.py).
-
-The overseer starts from the fix Run and follows what that Run's log
-names. The repoint Run is reached that way: its Run Id is the fix Run's
-with `-repoint` appended, and the fix Run's log holds the upstream PR and
-the Watch it armed.
-
-The judgment it applies is the next section, which it reads from here.
-
 ## When this loop needs a human
 
 This is the loop's judgment: what it leaves for the human and what it
-does not. The overseer's check reads it, and so does the human.
+does not. Nothing checks on the loop's Runs by itself; the human reads
+`impctl runs` and the Run logs under `.imp/runs/` against this list. The
+repoint Run is reached from the fix Run: its Run Id is the fix Run's with
+`-repoint` appended, and the fix Run's log holds the upstream PR and the
+Watch it armed.
 
 The loop needs a human when:
 
@@ -226,8 +208,7 @@ The loop needs a human when:
 The loop does not need a human when:
 
 - A Run is `running`. Fix Runs can take hours.
-- An upstream PR is OPEN with recent review activity. Say so in the
-  findings; it is not a summons.
+- An upstream PR is OPEN with recent review activity.
 - A bump PR is red with no fix Run yet and the fix Sensor ticked
   recently. The loop will pick it up.
 - A Run failed and its bump PR has since merged or closed. That is
