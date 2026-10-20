@@ -13,10 +13,12 @@ STANDING_INSTRUCTIONS owns the repair procedure; the wrapper does not infer
 success from the agent's report. Preparation rationale lives beside the
 relevant operations below.
 
-The clone uses GitHub state, independent of sources/. Repository-relative
-paths locate shared tools and workspace configuration; the Daemon's inherited
-cwd lets bare impctl find its socket. The temporary workspace is not a Git
-repository, which is why codex receives --skip-git-repo-check.
+The agent runs in a workspace thread (lib/python/workspace_thread/README.md):
+a worktree of this workspace at .workspace-threads/<slug>, with the ggml-staging-automation sourceset
+loaded into its sources/ and the clone moved onto the PR's head branch, hosted
+on Codex's daemon so it shows live in the agent command center. The clone
+uses GitHub state, independent of the main checkout's sources/. The Daemon's
+inherited cwd lets bare impctl find its socket.
 """
 
 import argparse
@@ -25,9 +27,14 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
+
+from workspace_thread import UNATTENDED_SETTINGS, prepare, run_turn
+
+# The sourceset the workspace thread loads: the staging clone plus the shared build
+# driver as its asset, which the agent runs as `sources/build.py`.
+SOURCESET = "ggml-staging-automation"
 
 # The narrow pattern keeps anything but a real bump PR URL from starting a
 # run; the capture group is the PR number the slug derives from.
@@ -41,10 +48,6 @@ FORK_PUSH_URL = "git@github.com:AaronStGeorge/llama.cpp.git"
 # hrx-system checkout dies before reaching a remote. The name is the
 # error message the agent reads when it tries.
 HRX_PUSH_URL = "hrx-system-is-never-pushed"
-
-# Cloned directly — the imp is self-contained and depends on no local
-# checkout of the staging repo.
-STAGING_REPO_URL = "git@github.com:ROCm/ggml-staging-automation.git"
 
 STAGING_REPO = "ROCm/ggml-staging-automation"
 
@@ -108,10 +111,18 @@ HANDOFF_SCHEMA = {
 STANDING_INSTRUCTIONS = """\
 Your job: make CI green on {pr_url}.
 
-This workspace holds a clone of ggml-staging-automation checked out on the
-PR's head branch `{head_branch}`, submodules initialized. There is no
-request beyond this prompt — diagnose from the PR itself: `gh pr checks`,
-`gh run view --log-failed`, the failing job's logs.
+Your working directory is a worktree of this workspace laid out as:
+
+    .venv/                              python with the build dependencies
+    sources/
+      ggml-staging-automation/          the clone, on the PR's head branch
+                                        `{head_branch}`, submodules initialized
+      build.py                          local build driver
+      sync_pr_body.py                   PR description sync
+      known-bad-runners.json            CI runners whose failures mean nothing
+
+There is no request beyond this prompt — diagnose from the PR itself:
+`gh pr checks`, `gh run view --log-failed`, the failing job's logs.
 
 Working rules:
 
@@ -222,7 +233,7 @@ Working rules:
 
   - Bump PR: {pr_url}
   - Latest run: [link](<latest run link>).
-- Known-bad runners: `known-bad-runners.json` in this workspace lists CI
+- Known-bad runners: `sources/known-bad-runners.json` lists CI
   runners whose failures say nothing about the code. Before diagnosing a
   failed job, read its runner with `gh api
   repos/ROCm/ggml-staging-automation/actions/jobs/<job-id> --jq
@@ -249,13 +260,14 @@ Working rules:
 
 Iterate: after each push, watch the PR's checks with gh until they finish,
 read any failure, fix, push again. No round limit. Local validation first is
-cheaper than a CI round — `build.py` runs via `.venv/bin/python build.py`.
-After every push to the PR branch run `.venv/bin/python sync_pr_body.py
-{pr_url} --head "$(git rev-parse HEAD)"` from the ggml-staging-automation
-clone: it rewrites the PR body's llama.cpp row from the pushed commit, so
-the description never names a pin the branch does not have. `--head` is
-required right after a push — the PR API can report the previous head for
-a while.
+cheaper than a CI round — the build driver runs via
+`.venv/bin/python sources/build.py`.
+After every push to the PR branch run `.venv/bin/python
+sources/sync_pr_body.py {pr_url} --head <sha>` with `<sha>` the clone's
+`git rev-parse HEAD`: it rewrites the PR body's llama.cpp row from the
+pushed commit, so the description never names a pin the branch does not
+have. `--head` is required right after a push — the PR API can report the
+previous head for a while.
 Stop only when CI is green, or when you are genuinely stuck without human
 input.
 
@@ -436,10 +448,10 @@ def main():
 
     # The workspace root comes from this file's own location
     # (scripts/imps/ggml-staging-automation/loops/bump-automation/fix-llama-bump/imp.py),
-    # used only for the agent-config and .venv symlinks below. The project
-    # directory (scripts/imps/ggml-staging-automation) holds the build.py
-    # and known-bad-runners.json shared with the standalone imps; the loop
-    # directory holds sync_pr_body.py.
+    # used only for the .venv symlink below. The project directory
+    # (scripts/imps/ggml-staging-automation) holds known-bad-runners.json,
+    # shared with the standalone imps; the loop directory holds
+    # sync_pr_body.py.
     ws = Path(__file__).resolve().parents[6]
     here = Path(__file__).resolve().parent
     project = here.parents[2]
@@ -470,13 +482,17 @@ def main():
         text=True,
     ).stdout.strip()
 
-    wsdir = Path(tempfile.mkdtemp(prefix=f"{slug}-"))
-
-    clone = wsdir / "ggml-staging-automation"
-    run_to_log(
-        ["git", "clone", "--origin", "origin", STAGING_REPO_URL, str(clone)],
-        check=True,
+    # The workspace thread is named after the slug, so it reads in the
+    # command center as the Run does in `impctl runs`. A worktree left by an
+    # earlier Run of the same PR makes this fail: remove it (`git worktree
+    # remove .workspace-threads/<slug>`) before relaunching under a fresh Run Id.
+    thread, client = prepare(
+        slug, SOURCESET, settings=UNATTENDED_SETTINGS, log=sys.stderr
     )
+    wsdir = thread.worktree
+    sources = wsdir / "sources"
+
+    clone = sources / "ggml-staging-automation"
     run_to_log(["git", "checkout", head_branch], cwd=clone, check=True)
     run_to_log(
         ["git", "submodule", "update", "--init"], cwd=clone, check=True
@@ -508,55 +524,37 @@ def main():
         check=True,
     )
 
-    for name in (".agents", ".claude"):
-        config_dir = wsdir / name
-        config_dir.mkdir()
-        (config_dir / "skills").symlink_to(
-            ws / ".agents" / "skills", target_is_directory=True
-        )
-    (wsdir / "docs").symlink_to(ws / "docs", target_is_directory=True)
-    (wsdir / "AGENTS.md").symlink_to(ws / "AGENTS.md")
-    (wsdir / "CLAUDE.md").symlink_to(ws / "AGENTS.md")
-    # Reuse the environment for fast local validation; package installs in
-    # the Run can therefore affect the shared venv. This isolation tradeoff
-    # is accepted.
+    # The worktree is a checkout of this workspace, so AGENTS.md, docs/ and
+    # the skills are already in place. Reuse the main checkout's venv for
+    # fast local validation (Codex's daemon runs the agent's shell without
+    # direnv, so nothing else would create one); package installs in the Run
+    # can therefore affect the shared venv. This isolation tradeoff is
+    # accepted.
     (wsdir / ".venv").symlink_to(ws / ".venv", target_is_directory=True)
-    shutil.copy2(project / "build.py", wsdir / "build.py")
+    # Beside the clone, where the sourceset's build.py already is, so the
+    # prompt's layout holds.
     shutil.copy2(
-        project / "known-bad-runners.json", wsdir / "known-bad-runners.json"
+        project / "known-bad-runners.json", sources / "known-bad-runners.json"
     )
-    shutil.copy2(here.parent / "sync_pr_body.py", wsdir / "sync_pr_body.py")
+    shutil.copy2(here.parent / "sync_pr_body.py", sources / "sync_pr_body.py")
 
     print(f"run workspace: {wsdir}", file=sys.stderr)
 
     prompt = STANDING_INSTRUCTIONS.format(
         pr_url=pr_url, head_branch=head_branch, slug=slug
     )
-    schema_path = wsdir / ".handoff-schema.json"
-    schema_path.write_text(
-        json.dumps(HANDOFF_SCHEMA, indent=2) + "\n", encoding="utf-8"
+    # The turn is the whole repair; the thread stays on Codex's daemon
+    # afterwards, openable and steerable by `codex queue --thread <slug>`.
+    result = run_turn(
+        client, thread, prompt, output_schema=HANDOFF_SCHEMA, log=sys.stderr
     )
-    handoff_path = wsdir / ".handoff.json"
-
-    run_to_log(
-        [
-            "codex",
-            "exec",
-            "--dangerously-bypass-approvals-and-sandbox",
-            "--skip-git-repo-check",
-            "-C",
-            str(wsdir),
-            "--output-schema",
-            str(schema_path),
-            "--output-last-message",
-            str(handoff_path),
-            prompt,
-        ],
-        check=True,
-    )
+    client.close()
+    turn_finished = result.status == "completed"
+    if not turn_finished:
+        raise SystemExit(f"codex turn {result.status}: {result.error}")
 
     # The overseer follows the upstream PR and Watch from this logged handoff.
-    handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
+    handoff = json.loads(result.last_agent_message)
     print(json.dumps(handoff, indent=2), file=sys.stderr)
 
     # Backstop the PR-body sync from live head state — the agent was told

@@ -3,7 +3,9 @@
 Everything imp in this workspace that acts on
 [ROCm/ggml-staging-automation](https://github.com/ROCm/ggml-staging-automation)
 lives here. [scripts/imps/README.md](../README.md) describes the layout, and
-[build.py](build.py) supplies the shared build driver for repair workspaces.
+The [ggml-staging-automation sourceset](../../../sourcesets/ggml-staging-automation/sourceset.json)
+supplies the clone and, as its asset, the shared build driver every repair
+workspace thread runs as `sources/build.py`.
 [known-bad-runners.json](known-bad-runners.json) lists the project's CI
 runners whose failures are not evidence about the code; the bump loop's
 [README](loops/bump-automation/README.md) describes how the fix Imp uses it.
@@ -37,8 +39,12 @@ impctl launch fix-llama-perplexity fix-ppl-investigation-1 \
 ```
 
 Prerequisites: `gh` and `codex` logged in, SSH access to GitHub, and the
-workspace `.venv`. The Run clones the automation from GitHub into a fresh
-`/tmp/fix-ppl-*` workspace and depends on no checkout under `sources/`.
+workspace `.venv`. The Run works in a workspace thread
+([workspace_thread](../../../lib/python/workspace_thread/README.md)) named
+`fix-ppl-<run>-<regime>`: a worktree at `.workspace-threads/<name>` whose
+`sources/ggml-staging-automation` is a fresh clone from GitHub, independent
+of the main checkout's `sources/`; relaunching the same run and regime
+means removing that worktree first.
 
 Each Run checks out the supplied run's automation commit and initializes its
 pinned submodules. Codex attempts to reproduce, root-cause and fix the selected
