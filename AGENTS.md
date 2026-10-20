@@ -16,6 +16,13 @@ paths in the subagent's prompt so it reads them too.
 In plan mode, when working on a new feature, run the `requirements-cop` skill on
 the drafted requirements before designing against them.
 
+## Issue tracking
+
+Work is tracked as beads with `br`. Read [docs/beads.md](docs/beads.md) for
+how this workspace uses them: the `sourceset:<name>` label, epic beads that
+carry specs, and blocking edges between tickets. `/to-spec`, `/spec-review`
+and `/to-tickets` write beads by those conventions.
+
 ## Delegating workspace work
 
 A workspace thread is one way to delegate, not the only one: a Codex thread
