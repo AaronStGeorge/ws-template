@@ -50,6 +50,5 @@ def resolve(
         prompt = opening if prompt is None else f"{opening}\n\n{prompt}"
     else:
         resolved_name = name
-    if sourceset is not None:
-        validate_name(sourceset)
+    # The sourceset name is checked where it is read, in the sourceset package.
     return Assignment(resolved_name, sourceset, prompt)

@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Load a sourceset into the main checkout's ``sources/``, by hand.
 
-    python scripts/ws_load.py llama-cpp
+    python scripts/ws_load.py llama-cpp [--sourcesets-dir DIR]
 
 This is the by-hand door for the main checkout's ``sources/``, kept for
-review and human-in-the-loop work outside any workspace thread. Workspace
-thread worktrees are filled by workspace_thread
-(``lib/python/workspace_thread/README.md``), which also owns the loading
-itself; this script only empties ``sources/`` first and refuses when
-anything there exists only locally, because here, and only here, a load can
-destroy work.
+review and human-in-the-loop work outside any workspace thread. The
+loading itself is the sourceset package's
+(``lib/python/sourceset/README.md``); this script only empties ``sources/``
+first and refuses when anything there exists only locally, because here,
+and only here, a load can destroy work.
 """
 
 from __future__ import annotations
@@ -20,10 +19,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from workspace_thread import load_sourceset, read_sourceset
+from sourceset import SOURCESETS_DIR, SOURCES_DIR, load_sourceset, read_sourceset
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SOURCES = REPO_ROOT / "sources"
+SOURCES = REPO_ROOT / SOURCES_DIR
 
 
 def git_output(repo: Path, *args: str) -> str:
@@ -56,12 +55,19 @@ def unsaved_work(entry: Path) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("name", help="Directory name under sourcesets/.")
+    parser.add_argument("name", help="Directory name under the sourcesets directory.")
+    parser.add_argument(
+        "--sourcesets-dir",
+        type=Path,
+        help="directory to read the sourceset from; default: the workspace's sourcesets/",
+    )
     args = parser.parse_args()
+    given_a_directory = args.sourcesets_dir is not None
+    sourcesets_dir = args.sourcesets_dir if given_a_directory else REPO_ROOT / SOURCESETS_DIR
 
     try:
-        sourceset = read_sourceset(REPO_ROOT, args.name)
-    except FileNotFoundError as error:
+        sourceset = read_sourceset(sourcesets_dir, args.name)
+    except (ValueError, FileNotFoundError) as error:
         print(f"ws_load: {error}", file=sys.stderr)
         return 1
 

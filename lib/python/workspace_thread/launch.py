@@ -21,7 +21,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import codex, sourceset as sourcesets, worktree
+import sourceset
+
+from . import codex, worktree
 from .codex import Client, TurnResult
 from .workspace import main_checkout, slugify
 
@@ -51,28 +53,33 @@ def prepare(
     settings: dict[str, Any] | None = None,
     workspace: Path | None = None,
     log=sys.stderr,
+    sourcesets_dir: Path | None = None,
 ) -> tuple[WorkspaceThread, Client]:
     """Steps 1 to 5; returns the workspace thread and the daemon connection that made it.
 
     ``name`` is the workspace thread's title, free text that Codex shows as
     is; its slug names the worktree. For a bead id or an imp Run Id the two
     are equal. ``sourceset_name`` None leaves ``sources/`` empty, for
-    workspace threads that work on the workspace itself (the overseer's checks). ``log``
-    receives git and daemon-start output. The connection is returned so an
-    ending that starts a turn can send it; attach closes it unused.
+    workspace threads that work on the workspace itself (the overseer's checks).
+    ``sourcesets_dir`` is where the sourceset is read from, the workspace's
+    ``sourcesets/`` unless the entry was told otherwise. ``log`` receives git
+    and daemon-start output. The connection is returned so an ending that
+    starts a turn can send it; attach closes it unused.
     """
     # The title's provenance boundary: strip once for the Codex name, and
     # slugify once for the worktree, before anything is cut.
     name = name.strip()
     slug = slugify(name)
     ws = workspace if workspace is not None else main_checkout()
-    chosen = sourcesets.read_sourceset(ws, sourceset_name) if sourceset_name else None
+    if sourcesets_dir is None:
+        sourcesets_dir = ws / sourceset.SOURCESETS_DIR
+    chosen = sourceset.read_sourceset(sourcesets_dir, sourceset_name) if sourceset_name else None
 
     print(f"workspace thread {name}: cutting worktree", file=log)
     path = worktree.create(ws, name, slug, log)
     if chosen is not None:
         print(f"workspace thread {name}: loading sourceset {chosen.name}", file=log)
-        sourcesets.load_sourceset(chosen, path, log)
+        sourceset.load_sourceset(chosen, path, log)
 
     codex.ensure_daemon(log)
     client = Client.connect()

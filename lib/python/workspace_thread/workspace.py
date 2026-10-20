@@ -1,9 +1,9 @@
 """Where things are in a workspace, and how a workspace thread's title becomes its slug.
 
-A workspace is a clone of this repository. Its workspace threads are worktrees under
-``.workspace-threads/`` in the main checkout, and its sourcesets are checked in under
-``sourcesets/``, so both are reachable from any worktree by first finding the
-main checkout through git's common dir.
+A workspace is a clone of this repository. Its workspace threads are
+worktrees under ``.workspace-threads/`` in the main checkout, reachable
+from any worktree by first finding the main checkout through git's common
+dir. Its sourcesets are the sourceset package's (lib/python/sourceset).
 """
 
 from __future__ import annotations
@@ -25,16 +25,13 @@ NAME_MAX_LENGTH = 128
 NON_SLUG_RUN = re.compile(r"[^A-Za-z0-9]+")
 
 WORKSPACE_THREADS_DIR = ".workspace-threads"
-SOURCESETS_DIR = "sourcesets"
-SOURCES_DIR = "sources"
 
 
 def validate_name(name: str) -> str:
     """Return ``name`` if it is already a slug, else raise ValueError.
 
-    Called where a slug-shaped id enters from outside: a bead id, which goes
-    verbatim into ``br show``, and a sourceset name, which selects a
-    checked-in directory.
+    Called where a bead id enters from outside; it goes verbatim into
+    ``br show``.
     """
     is_slug = NAME.fullmatch(name) is not None
     fits = len(name) <= NAME_MAX_LENGTH
@@ -84,7 +81,3 @@ def main_checkout(start: Path | None = None) -> Path:
 
 def workspace_threads_dir(workspace: Path) -> Path:
     return workspace / WORKSPACE_THREADS_DIR
-
-
-def sourcesets_dir(workspace: Path) -> Path:
-    return workspace / SOURCESETS_DIR

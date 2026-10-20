@@ -43,11 +43,14 @@ This component inherits the imp design record's Language
 **Workspace** — a clone of this repository: skills, the imp runtime,
 `sources/`. The imp design record already uses the word this way.
 
-**Sourceset** — a checked-in manifest, `sourcesets/<name>/sourceset.json`,
-naming the repositories that fill `sources/`, plus an `assets/` directory
-of files that belong beside them. sourceset.py reads and loads one;
-[scripts/ws_load.py](../../../scripts/ws_load.py) is the by-hand door for
-the main checkout's `sources/`.
+**Sourceset** — the sources a piece of work needs, by name: a checked-in
+manifest, `<name>/sourceset.json` in the workspace's `sourcesets/` or in
+the directory an entry was given, listing repositories to clone into
+`sources/`, with assets linked beside them. The sourceset package reads
+and loads one, and its record
+([lib/python/sourceset/README.md](../sourceset/README.md)) holds the rest
+of that vocabulary, the by-hand door for the main checkout's `sources/`
+included.
 
 **Thread** — Codex's word, used here only in Codex's sense: one
 conversation on Codex's daemon, whatever started it. A human's chat, a
@@ -118,11 +121,14 @@ The executable, the human's entry:
 workspace-thread new <bead-id> [--prompt TEXT]                         # named after the bead; sourceset from its label
 workspace-thread new --name <title> [--sourceset <s>] [--prompt TEXT]  # no bead; without a sourceset sources/ stays empty
 workspace-thread new ... --detach                                      # start the first turn, print the Codex thread id, return
+workspace-thread new ... --sourcesets-dir DIR                          # read the sourceset from DIR, not the workspace's sourcesets/
 ```
 
-Either form names an assignment; `--detach` picks the ending. Without it
-the command attaches: it ends as an interactive `codex` on the new
-workspace thread, inside the new worktree, with the thread already named.
+Either form names an assignment; `--detach` picks the ending;
+`--sourcesets-dir DIR` reads the sourceset from `DIR` rather than the
+workspace's `sourcesets/`. Without `--detach` the command attaches: it
+ends as an interactive `codex` on the new workspace thread, inside the new
+worktree, with the thread already named.
 The opening prompt is typed for you as the first turn when there is one:
 the bead's ("Work on bead `<id>`...") with `--prompt` appended after a
 blank line, or `--prompt` alone; with neither, you type the first turn
@@ -137,13 +143,14 @@ after the thread exists, the command exits 1 with one stderr line naming
 the thread id and worktree, as the MCP tool does.
 
 The library is the launcher and has every ending. `prepare(name,
-sourceset, settings)` runs the shared steps and returns the workspace
-thread and the daemon connection; `attach(thread, prompt)` replaces the
-process with `codex resume`; `start_turn(client, thread, prompt,
-output_schema)` sends the opening prompt and returns the turn id; and
-`run_turn(client, thread, prompt, output_schema)` sends it, streams the
-turn's items into the Run log, and returns a `TurnResult` (status, error,
-last agent message) for an Imp to turn into an exit code.
+sourceset, settings, sourcesets_dir)` runs the shared steps, reading the
+sourceset from `sourcesets_dir` when one is given, and returns the
+workspace thread and the daemon connection; `attach(thread, prompt)`
+replaces the process with `codex resume`; `start_turn(client, thread,
+prompt, output_schema)` sends the opening prompt and returns the turn id;
+and `run_turn(client, thread, prompt, output_schema)` sends it, streams
+the turn's items into the Run log, and returns a `TurnResult` (status,
+error, last agent message) for an Imp to turn into an exit code.
 `opening_prompt(prompt)` is the one check the turn-starting endings share:
 the prompt, or a `ValueError` when there is none to send. An Imp calls
 `prepare` with `UNATTENDED_SETTINGS`, adding a `model` or `config` when its
@@ -197,11 +204,12 @@ Every entry runs the same steps; only the ending differs.
    workspace worktree takes no branch; only sourceset checkouts would, and
    that is part of the open bead process. `sources/` is gitignored, so it
    starts empty.
-3. **Sources.** Load the sourceset into the worktree's `sources/`, taken
-   from the bead's `sourceset:` label or the `--sourceset` flag; none
-   leaves `sources/` empty, for workspace threads that work on the
-   workspace itself (the overseer's checks). Full clones, every time; a
-   clone cache is a later addition that does not change this shape.
+3. **Sources.** Load the sourceset into the worktree's `sources/` through
+   the sourceset package, named by the bead's `sourceset:` label or the
+   `--sourceset` flag and read from the workspace's `sourcesets/` unless
+   the entry was given another directory; none leaves `sources/` empty,
+   for workspace threads that work on the workspace itself (the overseer's
+   checks).
 4. **Bead.** Nothing to wire. `br` run inside a linked worktree that has no
    `.beads/` of its own resolves to the primary checkout's `.beads/`
    through the worktree's `.git` file (tested with br 0.7.4 from a worktree
@@ -302,13 +310,17 @@ through them, and nothing placed there is safe.
   launches a Run.
 - The bead process beyond the opening prompt (claiming, branching, handoff
   and close) is unspecified on purpose, to be discovered by use.
-- Sourceset loading moves into workspace_thread as a function, and
-  `scripts/ws_load.py` becomes a thin command over it for filling the main
-  checkout's `sources/` by hand, which stays a real use: work is loaded
-  there outside any workspace thread for review and for human-in-the-loop
-  work. The refuse-if-unsaved check stays on that by-hand path only, the
-  one place a load can destroy work; the workspace thread path always
-  targets an empty `sources/` and carries no guard that cannot fire.
+- Sourceset loading is the sourceset package's; the launcher hands it a
+  name. It lived here until 2026-10-20, when filling the main checkout's
+  `sources/` by hand meant importing a thread library. That by-hand door
+  and the guard that keeps it from destroying work are recorded with the
+  package.
+- Where sourcesets are read from is the entry's configuration, not the
+  assignment's: `--sourcesets-dir` on the executable and on the MCP server
+  command, `prepare`'s `sourcesets_dir` for an Imp, and the workspace's
+  `sourcesets/` when none is given. The tool's parameters do not carry it:
+  an agent names a sourceset, and where the workspace keeps them is the
+  workspace's to configure.
 
 ## MCP and the workspace-thread skill
 
@@ -318,7 +330,9 @@ configuration is needed. The configured command resolves the main checkout
 through Git and runs the server from its virtualenv, bound to that
 checkout, so the same configuration works in linked worktrees and at
 different checkout paths, and a call from a child worktree creates a
-sibling in the same `.workspace-threads/`.
+sibling in the same `.workspace-threads/`. `--sourcesets-dir DIR` on that
+command reads sourcesets from `DIR` instead of the main checkout's
+`sourcesets/`.
 
 Entering the main checkout with direnv installs the MCP dependencies when
 needed. Without direnv, install the workspace package manually:

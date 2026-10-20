@@ -11,7 +11,7 @@ Except rather than horses, agents are zipping around — consuming tokens, farti
 _How_ the agents are orchestrated and go about actually accomplishing things has been changing pretty frequently.
 You'll need to look in `.agents/skills` to get a handle on how things work at the moment.
 
-What goes into `sources/` is a *sourceset*, `sourcesets/<name>/sourceset.json`; `python scripts/ws_load.py <name>` fills the main checkout's `sources/` by hand.
+What goes into `sources/` is a *sourceset*, `sourcesets/<name>/sourceset.json`; `python scripts/ws_load.py <name>` fills the main checkout's `sources/` by hand, and [lib/python/sourceset/README.md](lib/python/sourceset/README.md) is its record.
 A piece of work gets a *workspace thread*: `workspace-thread new <bead-id>` (or `workspace-thread new --name <title> --sourceset <name>`) cuts a worktree of this clone under `.workspace-threads/`, loads the sourceset into it, and opens a Codex thread there that shows in Codex's agent command center beside everything else running; `workspace-thread new ... --detach` starts one without attaching, and `--prompt TEXT` gives either form its first turn.
 Imps run their agents the same way.
 [lib/python/workspace_thread/README.md](lib/python/workspace_thread/README.md) is the record of how and why.

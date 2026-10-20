@@ -33,6 +33,7 @@ def create(
     sourceset: str | None = None,
     prompt: str | None = None,
     parent_thread_id: str | None = None,
+    sourcesets_dir: Path | None = None,
 ) -> CreatedWorkspaceThread:
     task = assignment.resolve(
         workspace, bead_id=bead_id, name=name, sourceset=sourceset, prompt=prompt
@@ -57,7 +58,9 @@ def create(
             "wait for this turn to finish and send a native follow-up to begin.\n\n"
             f"Assignment for the next turn:\n{opening}"
         )
-    thread, client = launch.prepare(task.name, task.sourceset, workspace=workspace)
+    thread, client = launch.prepare(
+        task.name, task.sourceset, workspace=workspace, sourcesets_dir=sourcesets_dir
+    )
     try:
         turn_id = launch.start_turn(client, thread, opening)
     except Exception as error:
@@ -75,7 +78,7 @@ def create(
     )
 
 
-def make_server(workspace: Path) -> FastMCP:
+def make_server(workspace: Path, sourcesets_dir: Path | None = None) -> FastMCP:
     server = FastMCP("workspace_threads")
 
     @server.tool()
@@ -106,6 +109,7 @@ def make_server(workspace: Path) -> FastMCP:
             sourceset=sourceset,
             prompt=prompt,
             parent_thread_id=parent_thread_id,
+            sourcesets_dir=sourcesets_dir,
         )
 
     return server
@@ -114,8 +118,15 @@ def make_server(workspace: Path) -> FastMCP:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--workspace", type=Path, required=True)
+    # The server's flag, not a tool parameter: an agent names a sourceset,
+    # and where the workspace keeps them is the workspace's to configure.
+    parser.add_argument(
+        "--sourcesets-dir",
+        type=Path,
+        help="directory to read sourcesets from; default: the workspace's sourcesets/",
+    )
     args = parser.parse_args()
-    make_server(main_checkout(args.workspace)).run(transport="stdio")
+    make_server(main_checkout(args.workspace), args.sourcesets_dir).run(transport="stdio")
 
 
 if __name__ == "__main__":

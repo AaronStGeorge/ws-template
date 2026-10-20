@@ -18,20 +18,16 @@ from .launch import (
     run_turn,
     start_turn,
 )
-from .sourceset import Sourceset, load_sourceset, read_sourceset
 from .workspace import main_checkout
 
 __all__ = [
     "UNATTENDED_SETTINGS",
-    "Sourceset",
     "WorkspaceThread",
     "TurnResult",
     "attach",
-    "load_sourceset",
     "main_checkout",
     "opening_prompt",
     "prepare",
-    "read_sourceset",
     "run_turn",
     "start_turn",
 ]

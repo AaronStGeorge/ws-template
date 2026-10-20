@@ -5,6 +5,7 @@
     workspace-thread new <bead-id> [--prompt TEXT]                        # named after the bead; sourceset from its label
     workspace-thread new --name <title> [--sourceset <s>] [--prompt TEXT]  # no bead
     workspace-thread new ... --detach                                     # start the first turn, print the Codex thread id, return
+    workspace-thread new ... --sourcesets-dir DIR                         # read the sourceset from DIR, not the workspace's sourcesets/
 
 Either form names an assignment; ``--detach`` picks the ending. Without it
 the command attaches: it ends as an interactive ``codex`` on the new
@@ -21,6 +22,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+from pathlib import Path
 
 from . import assignment, launch
 from .workspace import main_checkout
@@ -35,6 +37,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--name", help="title when there is no bead; its slug names the worktree"
     )
     new.add_argument("--sourceset", help="sourceset to load when there is no bead")
+    new.add_argument(
+        "--sourcesets-dir",
+        type=Path,
+        help="directory to read the sourceset from; default: the workspace's sourcesets/",
+    )
     new.add_argument(
         "--prompt",
         help="opening prompt for the first turn; appended to a bead's own",
@@ -59,7 +66,9 @@ def main(argv: list[str] | None = None) -> int:
         # Detach sends the opening prompt as the first turn, so there must be
         # one; checked here so a refused detach leaves no worktree behind.
         opening = launch.opening_prompt(task.prompt) if args.detach else task.prompt
-        thread, client = launch.prepare(task.name, task.sourceset, workspace=workspace)
+        thread, client = launch.prepare(
+            task.name, task.sourceset, workspace=workspace, sourcesets_dir=args.sourcesets_dir
+        )
     except (ValueError, LookupError, FileNotFoundError, FileExistsError) as error:
         print(f"workspace-thread new: {error}", file=sys.stderr)
         return 1
