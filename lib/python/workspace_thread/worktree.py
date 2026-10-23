@@ -11,6 +11,7 @@ checkout's ``.beads/`` on its own (README.md, step 4).
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -39,4 +40,5 @@ def create(workspace: Path, name: str, slug: str, log) -> Path:
         stdout=log,
         stderr=log,
     )
+    (path / "models").symlink_to(os.path.relpath(workspace / "models", path))
     return path

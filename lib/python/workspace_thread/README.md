@@ -203,7 +203,10 @@ Every entry runs the same steps; only the ending differs.
    bead, and everything about a workspace stays in the workspace. The
    workspace worktree takes no branch; only sourceset checkouts would, and
    that is part of the open bead process. `sources/` is gitignored, so it
-   starts empty.
+   starts empty. `models/` is a relative symlink to the main checkout's
+   `models/`, sharing downloaded models across threads. The link is created
+   even if the main checkout has no models yet; it becomes usable when that
+   directory is created.
 3. **Sources.** Load the sourceset into the worktree's `sources/` through
    the sourceset package, named by the bead's `sourceset:` label or the
    `--sourceset` flag and read from the workspace's `sourcesets/` unless
