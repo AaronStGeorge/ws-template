@@ -1,0 +1,6 @@
+{
+  "repos": [
+    {"url": "git@github.com:ROCm/hrx-solutions.git"},
+    {"url": "git@github.com:ROCm/hrx-system.git"}
+  ]
+}
