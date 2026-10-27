@@ -1,6 +1,12 @@
 {
   "repos": [
-    {"url": "git@github.com:ROCm/hrx-solutions.git"},
-    {"url": "git@github.com:ROCm/hrx-system.git"}
+    {
+      "url": "git@github.com:ROCm/hrx-solutions.git",
+      "ref": "de64b493bbe06488f2d049c15eabd63c56266a61"
+    },
+    {
+      "url": "git@github.com:ROCm/hrx-system.git",
+      "ref": "61417137f334cfa828b38d6e9b0f2d7190503f16"
+    }
   ]
 }
