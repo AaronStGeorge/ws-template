@@ -33,6 +33,12 @@ says how to launch one with `workspace_threads.create_workspace_thread`.
 Ordinary threads and subagents share the caller's checkout and provision no
 worktree or sourceset, which suits work meant to share it, such as a review.
 
+## Local models
+
+Local GGUF files are stored in `models/` at the main workspace root. Check there
+before downloading models for local tests or benchmarks. In workspace threads,
+use the `models/` symlink to that shared directory.
+
 ## Running HRX on a GPU
 
 Not every AMD GPU in a machine works with HRX, and it does not pick a good one

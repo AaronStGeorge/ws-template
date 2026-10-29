@@ -1,5 +1,0 @@
-interface:
-  display_name: "Spec Review"
-  short_description: "Grill a spec until a stranger could build from it"
-policy:
-  allow_implicit_invocation: false

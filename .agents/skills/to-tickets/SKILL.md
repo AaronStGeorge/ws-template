@@ -17,11 +17,9 @@ commands.
 
 ### 1. Gather context
 
-The usual input is an epic bead whose spec `/to-spec` has already written
-and `/spec-review` has already grilled: work small enough to skip a spec is
-usually small enough to code in the session that discussed it. Read the
-epic in full: `br show <id> --json` for the spec and
-`br comments list <id> --json` for its comments.
+The usual input is an epic bead whose spec `/to-spec`. Read the epic in full:
+`br show <id> --json` for the spec and `br comments list <id> --json` for its
+comments.
 
 Without an epic, work from a document path or the conversation itself, but
 say so: the usual move is `/to-spec` first, and the user may prefer it.

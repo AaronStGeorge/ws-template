@@ -6,9 +6,7 @@ disable-model-invocation: true
 
 This skill takes the current conversation context and codebase understanding
 and produces a spec: the statement of a task to be accomplished, detailed
-enough that someone outside this conversation can build it. Do NOT interview
-the user; just synthesize what you already know, publish it, and hand it to
-`/spec-review`, which does the asking.
+enough that someone outside this conversation can build it.
 
 The spec becomes the description of an epic bead. Read
 [docs/beads.md](../../../docs/beads.md) for how this workspace uses beads and
@@ -28,9 +26,12 @@ the [br skill](../br/SKILL.md) for the commands.
    should be preferred to new ones. Use the highest boundary possible. If new
    seams are needed, propose them at the highest point you can. The fewer
    seams across the codebase, the better; the ideal number is one. The
-   review checks them with the user; record them in the Testing section.
+   review checks them with the user; record them in the Validation section.
 
-3. Draft the spec using the template below.
+3. Draft the spec using the template below. Present this to the user for review
+   before publishing. Iterate with the user using the grilling skill to refine
+   and validate the spec until a shared mental model of what is to be built is
+   achieved.
 
 4. Publish the draft as an epic bead:
 
@@ -42,10 +43,6 @@ the [br skill](../br/SKILL.md) for the commands.
 
    The sourceset is the one whose sources the work touches; ask if it is
    unclear. Apply no other labels. Report the bead's title and id.
-
-5. Run the Skill tool with "spec-review", passing the bead id. Publishing
-   first means the review's decisions land in the bead as they settle, so an
-   abrupt end loses nothing.
 
 <spec-template>
 
@@ -83,7 +80,7 @@ Code is often the clearest way to state a decision; include snippets where
 they communicate best. Paths that identify a thing are fine; paths that
 identify a moment (worktrees, build and evidence directories) are not.
 
-## Testing
+## Validation
 
 Which boundaries will be tested and what makes a good test there: external
 behaviour at the boundary, not implementation details. Name prior art, the
